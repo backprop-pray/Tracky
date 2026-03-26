@@ -1,0 +1,80 @@
+<mujoco model="agricultural_rover_base">
+    <option gravity="0 0 -9.81" timestep="0.005" integrator="implicitfast"/>
+
+    <default>
+        <geom condim="3" friction="1 0.005 0.0001" solref="0.01 1" solimp=".9 .95 .001"/>
+        <joint damping="0.1"/>
+    </default>
+
+    <asset>
+        <texture name="grass_tex" type="2d" builtin="checker" rgb1="0.22 0.50 0.15" rgb2="0.28 0.55 0.20" width="512" height="512"/>
+        <material name="grass_mat" texture="grass_tex" texrepeat="12 12" texuniform="true" reflectance="0.05"/>
+        
+        <texture name="dirt_tex" type="2d" builtin="flat" rgb1="0.55 0.38 0.22" rgb2="0.50 0.35 0.20" width="64" height="64"/>
+        <material name="dirt_mat" texture="dirt_tex" reflectance="0.02"/>
+
+        <texture name="sky_tex" type="skybox" builtin="gradient" rgb1="0.40 0.65 0.95" rgb2="0.85 0.92 1.0" width="512" height="512"/>
+
+        <material name="trunk_mat"  rgba="0.45 0.28 0.12 1" reflectance="0.05"/>
+        <material name="canopy_mat" rgba="0.18 0.55 0.18 1" reflectance="0.1"/>
+        <material name="crop_mat"   rgba="0.35 0.62 0.18 1" reflectance="0.05"/>
+        <material name="crop_ripe_mat" rgba="0.80 0.72 0.15 1" reflectance="0.05"/>
+        <material name="weed_mat" rgba="0.25 0.65 0.18 1" reflectance="0.08"/>
+        <material name="fence_mat" rgba="0.60 0.42 0.22 1" reflectance="0.05"/>
+        <material name="rock_mat" rgba="0.5 0.5 0.5 1"/>
+        
+        <material name="rover_mat" rgba="0.8 0.2 0.2 1" reflectance="0.3"/>
+        <material name="wheel_mat" rgba="0.1 0.1 0.1 1"/>
+
+        <hfield name="terrain" nrow="60" ncol="60" size="20 20 0.3 0.1"/>
+    </asset>
+
+    <worldbody>
+        <light name="sun" directional="true" diffuse="1.0 0.95 0.8" specular="0.3 0.3 0.3"
+               pos="5 -3 8" dir="-0.3 0.2 -1" castshadow="true"/>
+        <light name="fill" directional="true" diffuse="0.3 0.35 0.45" specular="0.05 0.05 0.05"
+               pos="-4 4 6" dir="0.3 -0.3 -1" castshadow="false"/>
+
+        <body name="rover" pos="0 0 0.25">
+            <joint type="free"/>
+            <geom name="chassis" type="box" size="0.2 0.1 0.05" material="rover_mat" mass="5"/>
+            
+            <site name="marker" pos="0.2 0 0" size="0.02" rgba="0 0 1 1"/>
+
+            <body name="fl_wheel" pos="0.15 0.12 -0.05" euler="90 0 0">
+                <joint name="fl-wheel" type="hinge" axis="0 0 -1" damping="0.1"/>
+                <geom name="fl_wheel_geom" type="cylinder" size="0.08 0.02" material="wheel_mat" mass="1"/>
+            </body>
+            <body name="fr_wheel" pos="0.15 -0.12 -0.05" euler="90 0 0">
+                <joint name="fr-wheel" type="hinge" axis="0 0 -1" damping="0.1"/>
+                <geom name="fr_wheel_geom" type="cylinder" size="0.08 0.02" material="wheel_mat" mass="1"/>
+            </body>
+            <body name="rl_wheel" pos="-0.15 0.12 -0.05" euler="90 0 0">
+                <joint name="rl-wheel" type="hinge" axis="0 0 -1" damping="0.1"/>
+                <geom name="rl_wheel_geom" type="cylinder" size="0.08 0.02" material="wheel_mat" mass="1"/>
+            </body>
+            <body name="rr_wheel" pos="-0.15 -0.12 -0.05" euler="90 0 0">
+                <joint name="rr-wheel" type="hinge" axis="0 0 -1" damping="0.1"/>
+                <geom name="rr_wheel_geom" type="cylinder" size="0.08 0.02" material="wheel_mat" mass="1"/>
+            </body>
+
+            <site name="ray_front" pos="0.2 0 0" zaxis="1 0 0" type="cylinder" size="0.01 0.01" rgba="1 0 0 1"/>
+            <site name="ray_left" pos="0.2 0.1 0" zaxis="1 1 0" type="cylinder" size="0.01 0.01" rgba="1 0 0 1"/>
+            <site name="ray_right" pos="0.2 -0.1 0" zaxis="1 -1 0" type="cylinder" size="0.01 0.01" rgba="1 0 0 1"/>
+        </body>
+    </worldbody>
+
+    <sensor>
+        <rangefinder name="rf_front" site="ray_front" cutoff="5.0"/>
+        <rangefinder name="rf_left" site="ray_left" cutoff="5.0"/>
+        <rangefinder name="rf_right" site="ray_right" cutoff="5.0"/>
+        <framepos name="rover_pos" objtype="site" objname="marker"/>
+    </sensor>
+
+    <actuator>
+        <velocity name="fl-velocity" joint="fl-wheel" kv="10"/>
+        <velocity name="rl-velocity" joint="rl-wheel" kv="10"/>
+        <velocity name="fr-velocity" joint="fr-wheel" kv="10"/>
+        <velocity name="rr-velocity" joint="rr-wheel" kv="10"/>
+    </actuator>
+</mujoco>
