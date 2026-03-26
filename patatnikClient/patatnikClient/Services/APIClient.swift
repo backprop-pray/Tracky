@@ -44,6 +44,41 @@ actor APIClient {
         token
     }
 
+    func post<B: Encodable & Sendable>(endpoint: String, body: B, requiresAuth: Bool = false) async throws {
+        let baseURL = AppConfig.baseURL
+        guard let url = URL(string: "\(baseURL)\(endpoint)") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        if requiresAuth {
+            guard let token else {
+                throw APIError.serverError(401, "Not authenticated.")
+            }
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (_, response): (Data, URLResponse)
+        do {
+            (_, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            throw APIError.networkError
+        }
+
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.networkError
+        }
+
+        guard (200...299).contains(http.statusCode) else {
+            throw APIError.serverError(http.statusCode, "")
+        }
+    }
+
     func get<T: Decodable & Sendable>(endpoint: String, requiresAuth: Bool = false) async throws -> APIEnvelope<T> {
         let baseURL = AppConfig.baseURL
         guard let url = URL(string: "\(baseURL)\(endpoint)") else {

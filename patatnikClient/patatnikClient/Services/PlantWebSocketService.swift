@@ -1,11 +1,18 @@
 import Foundation
 
+nonisolated struct RecommendationMessage: Codable, Sendable {
+    let plantId: Int
+    let disease: String
+    let text: String
+}
+
 @MainActor
 final class PlantWebSocketService {
     static let shared = PlantWebSocketService()
     private init() {}
 
     var onPlantReceived: ((Plant) -> Void)?
+    var onRecommendationReceived: ((String, String) -> Void)?
 
     private var webSocketTask: URLSessionWebSocketTask?
     private var isConnected = false
@@ -193,14 +200,29 @@ final class PlantWebSocketService {
         print("[WS] SUBSCRIBE to \(topicDest)")
         Task { await sendAsync(frame: subFrame3) }
 
+        // Recommendations — user queue
+        let recoUserDest = "/user/queue/recommendations"
+        let recoFrame1 = StompFrame.subscribe(destination: recoUserDest, id: "sub-user-recommendations")
+        print("[WS] SUBSCRIBE to \(recoUserDest)")
+        Task { await sendAsync(frame: recoFrame1) }
+
+        let recoExplicitDest = "/user/\(userId)/queue/recommendations"
+        let recoFrame2 = StompFrame.subscribe(destination: recoExplicitDest, id: "sub-explicit-recommendations")
+        print("[WS] SUBSCRIBE to \(recoExplicitDest)")
+        Task { await sendAsync(frame: recoFrame2) }
+
+        let recoTopicDest = "/topic/recommendations"
+        let recoFrame3 = StompFrame.subscribe(destination: recoTopicDest, id: "sub-topic-recommendations")
+        print("[WS] SUBSCRIBE to \(recoTopicDest)")
+        Task { await sendAsync(frame: recoFrame3) }
+
         startHeartbeat()
     }
 
 
     private func handleMessageFrame(raw: String) {
-        if let destination = StompFrame.header("destination", from: raw) {
-            print("[WS] MESSAGE destination: \(destination)")
-        }
+        let destination = StompFrame.header("destination", from: raw)
+        print("[WS] MESSAGE destination: \(destination ?? "unknown")")
 
         guard let body = StompFrame.body(from: raw) else {
             print("[WS] MESSAGE frame has no body")
@@ -214,6 +236,16 @@ final class PlantWebSocketService {
             return
         }
 
+        // Route by destination
+        if destination?.contains("/queue/recommendations") == true
+            || destination?.contains("/topic/recommendations") == true {
+            handleRecommendationBody(data: data, body: body)
+        } else {
+            handlePlantBody(data: data, body: body)
+        }
+    }
+
+    private func handlePlantBody(data: Data, body: String) {
         do {
             let plant = try JSONDecoder().decode(Plant.self, from: data)
             print("[WS] Decoded plant: id=\(plant.id), lat=\(plant.latitude), lon=\(plant.longitude)")
@@ -228,12 +260,28 @@ final class PlantWebSocketService {
             print("[WS] Failed to decode Plant from body: \(error)")
             print("[WS] Raw body was: \(body)")
 
-            if let envelopeData = body.data(using: .utf8),
-               let envelope = try? JSONDecoder().decode(APIEnvelope<Plant>.self, from: envelopeData),
+            if let envelope = try? JSONDecoder().decode(APIEnvelope<Plant>.self, from: data),
                let plant = envelope.data {
                 print("[WS] Decoded plant from envelope: id=\(plant.id)")
                 onPlantReceived?(plant)
             }
+        }
+    }
+
+    private func handleRecommendationBody(data: Data, body: String) {
+        do {
+            let msg = try JSONDecoder().decode(RecommendationMessage.self, from: data)
+            print("[WS] Recommendation received for plant \(msg.plantId): \(msg.disease)")
+
+            if let callback = onRecommendationReceived {
+                callback(msg.disease, msg.text)
+                print("[WS] onRecommendationReceived callback fired")
+            } else {
+                print("[WS] onRecommendationReceived callback is nil — no listener attached!")
+            }
+        } catch {
+            print("[WS] Failed to decode recommendation: \(error)")
+            print("[WS] Raw body was: \(body)")
         }
     }
 

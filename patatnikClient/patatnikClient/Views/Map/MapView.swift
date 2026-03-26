@@ -1,5 +1,6 @@
 import SwiftUI
 import MapKit
+import CoreLocation
 
 struct MapView: UIViewRepresentable {
     let plants: [Plant]
@@ -14,7 +15,6 @@ struct MapView: UIViewRepresentable {
         let mapView = MKMapView()
         mapView.delegate = context.coordinator
         mapView.mapType = .hybridFlyover
-        mapView.showsUserLocation = true
         mapView.showsCompass = true
         mapView.showsScale = true
         mapView.showsBuildings = true
@@ -25,11 +25,29 @@ struct MapView: UIViewRepresentable {
             forAnnotationViewWithReuseIdentifier: MKMapViewDefaultAnnotationViewReuseIdentifier
         )
 
+        // Request location permission and enable user location only if authorized
+        let locationManager = LocationManager.shared
+        locationManager.requestPermission()
+
+        let status = locationManager.authorizationStatus
+        if status == .authorizedWhenInUse || status == .authorizedAlways {
+            mapView.showsUserLocation = true
+        }
+
+        // Store mapView reference so we can update showsUserLocation later
+        context.coordinator.mapViewRef = mapView
+
         return mapView
     }
 
     func updateUIView(_ mapView: MKMapView, context: Context) {
         mapView.mapType = mapType
+
+        // Enable user location once authorized
+        let status = LocationManager.shared.authorizationStatus
+        if status == .authorizedWhenInUse || status == .authorizedAlways {
+            mapView.showsUserLocation = true
+        }
 
         // Sync annotations
         let existing = mapView.annotations.filter { !($0 is MKUserLocation) }
@@ -62,6 +80,7 @@ struct MapView: UIViewRepresentable {
     class Coordinator: NSObject, MKMapViewDelegate {
         let parent: MapView
         var previousPlantCount = 0
+        weak var mapViewRef: MKMapView?
 
         init(parent: MapView) {
             self.parent = parent

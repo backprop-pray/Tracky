@@ -71,7 +71,37 @@ struct HomeView: View {
                     .padding(.bottom, 40)
                 }
             }
+
+            // Plant detail sheet overlay
+            if let plant = plantVM.selectedPlant {
+                Color.black.opacity(0.3)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.35)) {
+                            plantVM.selectedPlant = nil
+                        }
+                    }
+                    .transition(.opacity)
+                    .zIndex(199)
+
+                VStack {
+                    Spacer()
+                    PlantDetailSheet(
+                        plant: plant,
+                        onClose: {
+                            withAnimation(.spring(response: 0.35)) {
+                                plantVM.selectedPlant = nil
+                            }
+                        }
+                    )
+                }
+                .ignoresSafeArea(edges: .bottom)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(200)
+            }
         }
+        .animation(.spring(response: 0.4, dampingFraction: 0.82),
+                    value: plantVM.selectedPlant?.id)
         .task {
             plantVM.bindWebSocket()
 
