@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "plant-pipeline"
+version = "0.1.0"
+description = "Plant inspection pipeline for Raspberry Pi 5 agricultural rover"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "numpy>=1.26",
+  "opencv-python>=4.9",
+  "Pillow>=10.2",
+  "pydantic>=2.6",
+  "PyYAML>=6.0",
+  "requests>=2.31",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+ml = [
+  "torch>=2.2",
+  "torchvision>=0.17",
+  "tflite-runtime>=2.14; platform_machine == 'aarch64' or platform_machine == 'armv7l'",
+  "ultralytics>=8.3",
+]
+
+[project.scripts]
+plant-pipeline = "plant_pipeline.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["plant_pipeline*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

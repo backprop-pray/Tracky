@@ -1,0 +1,48 @@
+batch1:
+  output_root: ./data/batch1
+  working_size: 640
+  roi_format: png
+  debug_overlays: false
+  write_roi: true
+quality_batch1:
+  min_blur_score: 90.0
+  min_motion_ratio: 0.18
+  max_motion_ratio: 5.5
+  min_brightness: 45.0
+  max_brightness: 215.0
+  max_dark_fraction: 0.55
+  max_bright_fraction: 0.35
+  compute_vegetation_metrics: true
+  reject_on_vegetation_fraction: false
+detector_batch1:
+  backend: mock
+  model_path: ""
+  device: cpu
+  min_confidence: 0.15
+  allowed_labels:
+    - leaf
+    - plant
+  warmup_runs: 3
+  benchmark_runs: 20
+  licensing_note: ""
+cluster:
+  merge_iou_threshold: 0.15
+  merge_distance_threshold: 0.08
+  min_cluster_members: 1
+  min_cluster_area_ratio: 0.01
+  bbox_expand_ratio: 0.12
+  single_detection_expand_ratio: 0.45
+  single_detection_context_distance_ratio: 0.20
+  min_final_roi_width_ratio: 0.20
+  min_final_roi_height_ratio: 0.25
+  oversized_cluster_penalty_start: 0.35
+  oversized_cluster_penalty_weight: 0.80
+  border_touch_margin_ratio: 0.03
+  border_touch_penalty_weight: 0.35
+  score_weight_confidence: 0.5
+  score_weight_area: 0.3
+  score_weight_centrality: 0.2
+api:
+  host: 127.0.0.1
+  port: 8000
+  enable_api: false
