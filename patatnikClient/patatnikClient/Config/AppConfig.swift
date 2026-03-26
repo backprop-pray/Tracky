@@ -1,5 +1,5 @@
 import Foundation
 
-enum AppConfig {
+nonisolated enum AppConfig {
     static let baseURL = "https://morzio.com/api"
 }

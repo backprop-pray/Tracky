@@ -1,6 +1,6 @@
 import Foundation
 
-struct AuthResponse: Codable {
+nonisolated struct AuthResponse: Codable, Sendable {
     let token: String
     let id: Int
     let email: String

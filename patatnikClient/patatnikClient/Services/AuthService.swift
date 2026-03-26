@@ -7,7 +7,7 @@ struct AuthService {
         case invalidCredentials
         case serverError(String)
         case networkError
-        case decodingError(String) // <-- Added this to help catch JSON mismatches
+        case decodingError(String)
 
         var userMessage: String {
             switch self {
@@ -35,7 +35,9 @@ struct AuthService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(LoginBody(email: email, password: password))
 
-        return try await perform(request)
+        let authResponse = try await perform(request)
+        await APIClient.shared.setToken(authResponse.token)
+        return authResponse
     }
 
     func register(name: String, email: String, password: String) async throws -> AuthResponse {
@@ -50,7 +52,9 @@ struct AuthService {
             RegisterBody(username: name, email: email, password: password)
         )
 
-        return try await perform(request)
+        let authResponse = try await perform(request)
+        await APIClient.shared.setToken(authResponse.token)
+        return authResponse
     }
 
     // MARK: - Private
@@ -62,11 +66,6 @@ struct AuthService {
         } catch {
             throw AuthError.networkError
         }
-        
-        // Print raw json to console for debugging!
-        if let rawJSON = String(data: data, encoding: .utf8) {
-            print("[AuthService] Raw Response: \(rawJSON)")
-        }
 
         guard let http = response as? HTTPURLResponse else {
             throw AuthError.networkError
@@ -77,32 +76,24 @@ struct AuthService {
         }
 
         guard (200...299).contains(http.statusCode) else {
-            if let body = try? JSONDecoder().decode(ErrorBody.self, from: data) {
+            if let body = try? JSONDecoder().decode(ServerErrorBody.self, from: data) {
                 throw AuthError.serverError(body.message)
             }
             throw AuthError.serverError("Server error (\(http.statusCode))")
         }
 
         do {
-            // First decode standard wrapper { status, message, data }
             let envelope = try JSONDecoder().decode(APIEnvelope<AuthResponse>.self, from: data)
             guard let authData = envelope.data else {
                 throw AuthError.decodingError("Data was null on success")
             }
-            
             return authData
+        } catch let error as AuthError {
+            throw error
         } catch {
-            print("[AuthService] Decoding Error: \(error)")
             throw AuthError.decodingError(error.localizedDescription)
         }
     }
-}
-
-// MARK: - Generic API Wrapper matching backend
-private struct APIEnvelope<T: Decodable>: Decodable {
-    let status: Int
-    let message: String
-    let data: T?
 }
 
 // MARK: - Request Bodies
@@ -118,6 +109,6 @@ private struct RegisterBody: Encodable {
     let password: String
 }
 
-private struct ErrorBody: Decodable {
+private struct ServerErrorBody: Decodable {
     let message: String
 }

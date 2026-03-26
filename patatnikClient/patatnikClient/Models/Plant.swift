@@ -1,6 +1,6 @@
 import Foundation
 
-struct Plant: Codable, Identifiable {
+nonisolated struct Plant: Codable, Identifiable, Sendable {
     let id: Int
     let latitude: Double
     let longitude: Double
