@@ -16,6 +16,9 @@ patchcore:
   test_bad_dir: ./data/datasets/roi_anomaly/test/bad
   image_size: 224
   center_crop:
+  train_batch_size: 8
+  eval_batch_size: 8
+  num_workers: 0
   backbone: wide_resnet50_2
   layers:
     - layer2

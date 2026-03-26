@@ -109,6 +109,9 @@ class Batch2PatchCoreSettings(BaseModel):
     test_bad_dir: str = "./data/datasets/roi_anomaly/test/bad"
     image_size: int = 224
     center_crop: Optional[int] = None
+    train_batch_size: int = 8
+    eval_batch_size: int = 8
+    num_workers: int = 0
     backbone: str = "wide_resnet50_2"
     layers: list[str] = Field(default_factory=lambda: ["layer2", "layer3"])
     coreset_sampling_ratio: float = 0.1
