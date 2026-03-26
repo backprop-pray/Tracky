@@ -3,7 +3,9 @@ import xml.etree.ElementTree as ET
 import numpy as np
 import mujoco
 import gymnasium as gym
+import torch
 from gymnasium import spaces
+from ultralytics import FastSAM
 
 class AgriculturalRoverEnv(gym.Env):
     metadata = {
@@ -11,7 +13,7 @@ class AgriculturalRoverEnv(gym.Env):
         "render_fps": 20
     }
 
-    def __init__(self, render_mode=None, base_xml_path="agricultural_rover_base.xml", seed=None):
+    def __init__(self, render_mode=None, base_xml_path="agricultural_tank_base.xml", seed=None):
         self.render_mode = render_mode
         self.base_xml_path = base_xml_path
         
@@ -22,7 +24,15 @@ class AgriculturalRoverEnv(gym.Env):
         self.data = None
         
         self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(2,), dtype=np.float32)
-        self.observation_space = spaces.Box(low=0.0, high=5.0, shape=(3,), dtype=np.float32)
+        self.observation_space = spaces.Box(low=0.0, high=5.0, shape=(5,), dtype=np.float32) # Expanded for Vision (X, Y)
+        
+        # Determine device (MPS for Mac Silicon, or CPU)
+        self.device = "mps" if torch.backends.mps.is_available() else "cpu"
+        print(f"Vision running on device: {self.device}")
+        
+        # Load FastSAM Heavyweight Vision AI once
+        self.vision_model = FastSAM("FastSAM-s.pt").to(self.device)
+        self.renderer = None
         
         self.reset(seed=seed)
 
@@ -140,6 +150,10 @@ class AgriculturalRoverEnv(gym.Env):
         
         self.model = mujoco.MjModel.from_xml_string(xml_string)
         
+        if self.renderer is not None:
+            self.renderer.close()
+        self.renderer = mujoco.Renderer(self.model, 256, 256)
+        
         if self.model.nhfield > 0:
             nrow = self.model.hfield_nrow[0]
             ncol = self.model.hfield_ncol[0]
@@ -171,16 +185,41 @@ class AgriculturalRoverEnv(gym.Env):
             if val < 0:
                 val = 5.0
             obs.append(val)
+            
+        # FastSAM Vision integration
+        self.renderer.update_scene(self.data, camera="rgb_cam")
+        frame = self.renderer.render()
+        
+        # Resize to 256 for YOLO/MPS stability
+        results = self.vision_model(frame, verbose=False, imgsz=256, device=self.device)
+        
+        vision_x = 2.5 # Default centered (mapped to 0-5 scale)
+        vision_y = 2.5
+        
+        if results[0].masks is not None:
+            masks = results[0].masks.data.cpu().numpy()
+            if len(masks) > 0:
+                # Find largest mask
+                largest_mask = masks[np.argmax([m.sum() for m in masks])]
+                ys, xs = np.nonzero(largest_mask)
+                if len(xs) > 0 and len(ys) > 0:
+                    vision_x = (np.mean(xs) / 256.0) * 5.0
+                    vision_y = (np.mean(ys) / 256.0) * 5.0
+                    
+        obs.append(vision_x)
+        obs.append(vision_y)
+        
         return np.array(obs, dtype=np.float32)
         
     def step(self, action):
         left_vel = action[0] * 5.0
         right_vel = action[1] * 5.0
         
-        self.data.ctrl[0] = left_vel
-        self.data.ctrl[1] = left_vel
-        self.data.ctrl[2] = right_vel
-        self.data.ctrl[3] = right_vel
+        # If using our tank car's motors, the control input is essentially torque.
+        # We allow the env to map these properly.
+        # In this env, ctrl[0:4] corresponds to the 4 wheel motors.
+        for i in range(min(len(self.data.ctrl), 4)):
+            self.data.ctrl[i] = action[i % 2] * 5.0
         
         robot_pos_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_SENSOR, "rover_pos")
         pos_adr = self.model.sensor_adr[robot_pos_id]
@@ -192,25 +231,43 @@ class AgriculturalRoverEnv(gym.Env):
         obs = self._get_obs()
         curr_x = self.data.sensordata[pos_adr]
         
+        # 1. Forward Progress Reward
         progress = curr_x - prev_x
-        reward = progress * 10.0
+        reward = progress * 100.0  # Massive multiplier to force driving!
         
-        if obs[0] < 0.15:
-            reward -= 5.0
+        # 2. Time Penalty
+        reward -= 0.05  # Bleed points for staying still to break 7-step plateau
+        
+        # 3. Collision / Obstacle Penalty
+        # Penalty increases as we get very close to obstacles
+        if obs[0] < 0.25:
+            reward -= 2.0 * (1.0 - obs[0]/0.25)
+            
+        # 4. Off-track / Lateral Penalty
+        # Encourage staying near the center (Y=0)
+        rover_body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "rover")
+        curr_y = self.data.xpos[rover_body_id][1]
+        reward -= abs(curr_y) * 0.5
             
         terminated = False
         truncated = False
         
-        if curr_x > 15.0:
+        # Win condition
+        if curr_x > 12.0:
             terminated = True
-            reward += 50.0
+            reward += 100.0
             
-        if obs[0] < 0.1 and progress < 0.001:
-            truncated = True
+        # Fail condition (Collision or stuck)
+        if obs[0] < 0.1:
+            terminated = True
+            reward -= 50.0
+            
+        if progress < 0.0001 and obs[0] > 1.0: # Times out if just sitting still
+             truncated = True
         
         info = {
             "x_progress": float(curr_x),
-            "reward_progress": float(progress * 10.0)
+            "step_reward": float(reward)
         }
             
         return obs, float(reward), terminated, truncated, info

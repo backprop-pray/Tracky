@@ -214,3 +214,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Agricultural Rover specific
+ppo_farm_logs/
+models/
+*.mp4
+*.pt
+MUJOCO_LOG.TXT

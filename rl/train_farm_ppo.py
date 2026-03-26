@@ -1,78 +1,70 @@
 import os
-import numpy as np
+import mujoco
+import torch
 from stable_baselines3 import PPO
-from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3.common.monitor import Monitor
-from farm_env import FarmEnv
+from stable_baselines3.common.callbacks import CheckpointCallback
+from agricultural_rover_env import AgriculturalRoverEnv
 
-
-class SurvivalTracker(BaseCallback):
-    """Tracks survival episodes and prints periodic summaries."""
-
-    def __init__(self, verbose=1):
-        super().__init__(verbose)
-        self.episodes = 0
-        self.ep_rewards = []
-        self.ep_lengths = []
-
-    def _on_step(self):
-        # Check for episode end via infos
-        infos = self.locals.get("infos", [])
-        for info in infos:
-            if "episode" in info:
-                self.episodes += 1
-                self.ep_rewards.append(info["episode"]["r"])
-                self.ep_lengths.append(info["episode"]["l"])
-                
-                if self.episodes % 50 == 0:
-                    recent_r = self.ep_rewards[-50:]
-                    recent_l = self.ep_lengths[-50:]
-                    avg_r = sum(recent_r) / len(recent_r)
-                    avg_l = sum(recent_l) / len(recent_l)
-                    print(
-                        f"  ► ep {self.episodes:>5d} | avg50_reward={avg_r:>7.1f} | avg50_length={avg_l:>6.1f}"
-                    )
-        return True
-
-
-def main():
-    xml_path = os.path.join(os.getcwd(), "farm_field.xml")
+def train():
+    print("Initializing environment...")
+    # Headless env for fast training
+    env = AgriculturalRoverEnv(base_xml_path="agricultural_tank_base.xml")
     
-    # Create environment with visualization enabled and wrap in Monitor
-    env = FarmEnv(xml_path, render_mode="human")
-    env = Monitor(env)
-
+    # Hyperparameters for PPO 
+    # Learning rate 3e-4 is standard. 
+    # Batch size 64 for small observation spaces.
     model = PPO(
-        "MlpPolicy",
-        env,
+        "MlpPolicy", 
+        env, 
+        verbose=1, 
         learning_rate=3e-4,
         n_steps=2048,
         batch_size=64,
         n_epochs=10,
         gamma=0.99,
-        gae_lambda=0.95,
-        clip_range=0.2,
-        ent_coef=0.05,  # Increased to encourage steering exploration
-        vf_coef=0.5,
-        max_grad_norm=0.5,
-        verbose=1,
-        policy_kwargs=dict(net_arch=[128, 128]),
-        device="cpu",
+        # Use MPS for Mac Silicon, else CPU
+        device="mps" if torch.backends.mps.is_available() else "cpu",
+        tensorboard_log="./ppo_farm_logs/"
     )
 
-    tracker = SurvivalTracker()
-    total_timesteps = 1_000_000
+    print("Starting training (300,000 steps)...")
+    checkpoint_callback = CheckpointCallback(
+        save_freq=50000, 
+        save_path="./models/",
+        name_prefix="ppo_rover"
+    )
 
-    print(f"Training PPO for {total_timesteps:,} steps on FarmEnv (Obstacle Avoidance)...")
-    try:
-        model.learn(total_timesteps=total_timesteps, callback=tracker)
-    except KeyboardInterrupt:
-        print("\nTraining interrupted by user. Saving current progress...")
-    finally:
-        model.save("farm_ppo_sb3")
-        print("\nDone training!")
-        print("Model saved to farm_ppo_sb3.zip")
+    model.learn(total_timesteps=300000, callback=checkpoint_callback)
+    
+    model_path = "ppo_agricultural_rover_final"
+    model.save(model_path)
+    print(f"Training complete. Model saved to {model_path}")
 
+def evaluate():
+    import time
+    from mujoco import viewer
+    
+    print("Evaluating trained model...")
+    env = AgriculturalRoverEnv(base_xml_path="agricultural_tank_base.xml")
+    model = PPO.load("ppo_agricultural_rover_final")
+    
+    obs, info = env.reset()
+    
+    with viewer.launch_passive(env.model, env.data) as viewer_window:
+        while viewer_window.is_running():
+            action, _states = model.predict(obs, deterministic=True)
+            obs, reward, terminated, truncated, info = env.step(action)
+            
+            viewer_window.sync()
+            time.sleep(0.01)
+            
+            if terminated or truncated:
+                print(f"Episode Done. Progress: {info['x_progress']:.2f}")
+                obs, info = env.reset()
 
 if __name__ == "__main__":
-    main()
+    # If model doesn't exist, train it. Otherwise, evaluate.
+    if not os.path.exists("ppo_agricultural_rover_final.zip"):
+        train()
+    
+    evaluate()
