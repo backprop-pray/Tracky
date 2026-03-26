@@ -10,7 +10,6 @@ struct HomeView: View {
     var body: some View {
         ZStack {
 
-            // 1. Full screen map
             MapView(
                 plants: plantVM.plants,
                 mapType: mapType,
@@ -18,8 +17,7 @@ struct HomeView: View {
             )
             .ignoresSafeArea()
 
-            // 2. Loading overlay
-            if plantVM.isLoading {
+            if plantVM.isLoading && plantVM.isFirstLoad {
                 ProgressView("Loading plants...")
                     .progressViewStyle(.circular)
                     .padding(24)
@@ -28,7 +26,6 @@ struct HomeView: View {
                     .shadow(radius: 8)
             }
 
-            // 3. Error toast
             if showError, let message = plantVM.errorMessage {
                 VStack {
                     HStack(spacing: 8) {
@@ -49,7 +46,6 @@ struct HomeView: View {
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
 
-            // 4. Map type toggle
             VStack {
                 Spacer()
                 HStack {
@@ -77,7 +73,16 @@ struct HomeView: View {
             }
         }
         .task {
-            await plantVM.loadPlants()
+            plantVM.bindWebSocket()
+
+            await plantVM.loadPlants(token: authVM.token)
+
+            if let userId = authVM.currentUser?.id {
+                PlantWebSocketService.shared.connect(userId: userId)
+            }
+        }
+        .onDisappear {
+            plantVM.stopListening()
         }
         .onChange(of: plantVM.errorMessage) { _, newValue in
             if newValue != nil {

@@ -1,7 +1,5 @@
 import Foundation
 
-// MARK: - Shared API Types
-
 nonisolated struct APIEnvelope<T: Decodable & Sendable>: Decodable, Sendable {
     let status: Int
     let message: String
@@ -31,8 +29,6 @@ nonisolated enum APIError: Error, Sendable {
     }
 }
 
-// MARK: - API Client
-
 actor APIClient {
     static let shared = APIClient()
 
@@ -42,6 +38,10 @@ actor APIClient {
 
     func setToken(_ token: String?) {
         self.token = token
+    }
+
+    func getToken() -> String? {
+        token
     }
 
     func get<T: Decodable & Sendable>(endpoint: String, requiresAuth: Bool = false) async throws -> APIEnvelope<T> {
