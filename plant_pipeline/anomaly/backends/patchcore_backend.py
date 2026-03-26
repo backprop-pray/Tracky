@@ -6,11 +6,108 @@ from typing import Any
 
 import cv2
 import numpy as np
+from torch.utils.data import DataLoader
 
 from plant_pipeline.anomaly.base import AnomalyBackend
 from plant_pipeline.anomaly.bundle import load_model_bundle
 from plant_pipeline.config.settings import Batch2Config
 from plant_pipeline.schemas.batch2 import Batch2FolderRequest, Batch2FolderResult, Batch2Request, SuspicionResult
+
+
+def _resolve_lightning_accelerator(device: str) -> str:
+    normalized = device.lower()
+    if normalized in {"cpu", "cuda", "gpu", "mps", "auto"}:
+        return "cuda" if normalized == "gpu" else normalized
+    return "cpu"
+
+
+def _load_anomalib_runtime() -> dict[str, Any]:
+    data_module = importlib.import_module("anomalib.data")
+    data_utils_module = importlib.import_module("anomalib.data.utils")
+    models_module = importlib.import_module("anomalib.models")
+    post_processing_module = importlib.import_module("anomalib.post_processing")
+    pl_module = importlib.import_module("pytorch_lightning")
+    torch_module = importlib.import_module("torch")
+    anomalib_module = importlib.import_module("anomalib")
+    return {
+        "anomalib": anomalib_module,
+        "torch": torch_module,
+        "pl": pl_module,
+        "InferenceDataset": getattr(data_module, "InferenceDataset"),
+        "InputNormalizationMethod": getattr(data_utils_module, "InputNormalizationMethod"),
+        "get_transforms": getattr(data_utils_module, "get_transforms"),
+        "get_model": getattr(models_module, "get_model"),
+        "ThresholdMethod": getattr(post_processing_module, "ThresholdMethod"),
+    }
+
+
+def load_patchcore_checkpoint(checkpoint_path: str | Path, device: str = "cpu") -> tuple[Any, dict[str, Any], dict[str, Any]]:
+    runtime = _load_anomalib_runtime()
+    torch_module = runtime["torch"]
+    checkpoint = torch_module.load(str(checkpoint_path), map_location=device, weights_only=False)
+    model = runtime["get_model"](checkpoint["hyper_parameters"])
+    model.load_state_dict(checkpoint["state_dict"], strict=False)
+    model.threshold_method = runtime["ThresholdMethod"].MANUAL
+    model.eval()
+    return model, checkpoint, runtime
+
+
+def predict_patchcore_paths(
+    checkpoint_path: str | Path,
+    input_path: str | Path,
+    *,
+    image_size: int,
+    center_crop: int | None,
+    device: str,
+    batch_size: int = 1,
+    num_workers: int = 0,
+) -> list[dict[str, Any]]:
+    model, checkpoint, runtime = load_patchcore_checkpoint(checkpoint_path, device=device)
+    normalization = runtime["InputNormalizationMethod"].IMAGENET
+    transform = runtime["get_transforms"](
+        image_size=image_size,
+        center_crop=center_crop,
+        normalization=normalization,
+    )
+    dataset = runtime["InferenceDataset"](path=str(input_path), transform=transform)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    trainer = runtime["pl"].Trainer(
+        accelerator=_resolve_lightning_accelerator(device),
+        devices=1,
+        logger=False,
+        enable_progress_bar=False,
+        num_sanity_val_steps=0,
+    )
+    predictions = trainer.predict(model=model, dataloaders=dataloader)
+    items: list[dict[str, Any]] = []
+    for batch in predictions:
+        image_paths = batch["image_path"]
+        pred_scores = batch["pred_scores"]
+        anomaly_maps = batch.get("anomaly_maps")
+        if isinstance(image_paths, str):
+            image_paths = [image_paths]
+        if hasattr(pred_scores, "detach"):
+            pred_scores = pred_scores.detach().cpu()
+        if anomaly_maps is not None and hasattr(anomaly_maps, "detach"):
+            anomaly_maps = anomaly_maps.detach().cpu()
+        for index, image_path in enumerate(image_paths):
+            score_value = pred_scores[index]
+            if hasattr(score_value, "item"):
+                score = float(score_value.item())
+            else:
+                score = float(score_value)
+            anomaly_map = None
+            if anomaly_maps is not None:
+                anomaly_map = np.asarray(anomaly_maps[index]).squeeze().astype(np.float32)
+            items.append(
+                {
+                    "image_path": str(image_path),
+                    "score": score,
+                    "anomaly_map": anomaly_map,
+                    "checkpoint_hparams": checkpoint["hyper_parameters"],
+                }
+            )
+    return items
 
 
 class PatchCoreBackend(AnomalyBackend):
@@ -21,10 +118,9 @@ class PatchCoreBackend(AnomalyBackend):
         self.bundle = None
         self.model_name = config.patchcore.model_name
         self.model_version = config.patchcore.model_version
-        self._engine: Any = None
-        self._predict_dataset_cls: Any = None
         self._loaded = False
         self._anomalib_available = False
+        self._fallback_reason: str | None = None
 
     def load(self) -> None:
         self.bundle = load_model_bundle(self.config)
@@ -34,15 +130,13 @@ class PatchCoreBackend(AnomalyBackend):
         self.model_name = self.bundle.model_name
         self.model_version = self.bundle.model_version
         try:
-            engine_module = importlib.import_module("anomalib.engine")
-            data_module = importlib.import_module("anomalib.data")
-        except ImportError:
+            _load_anomalib_runtime()
+        except Exception as exc:  # pragma: no cover - depends on local ml env
             self._anomalib_available = False
-            self._loaded = True
-            return
-        self._engine = getattr(engine_module, "Engine")(accelerator=self.config.patchcore.device)
-        self._predict_dataset_cls = getattr(data_module, "PredictDataset")
-        self._anomalib_available = True
+            self._fallback_reason = f"anomalib_unavailable:{type(exc).__name__}"
+        else:
+            self._anomalib_available = True
+            self._fallback_reason = None
         self._loaded = True
 
     def predict(self, request: Batch2Request) -> SuspicionResult:
@@ -54,7 +148,7 @@ class PatchCoreBackend(AnomalyBackend):
         image = cv2.imread(str(roi_path))
         if image is None:
             raise ValueError(f"Failed to read ROI image: {request.roi_path}")
-        score, anomaly_map = self._predict_raw(request, image)
+        score, anomaly_map, mode = self._predict_raw(request, image)
         lower, upper = self._thresholds()
         label = self._label_for_score(score, lower, upper)
         confidence = self._confidence_for_score(score, lower, upper)
@@ -74,7 +168,9 @@ class PatchCoreBackend(AnomalyBackend):
             model_name=self.model_name,
             model_version=self.model_version,
             debug={
+                "backend_mode": mode,
                 "anomalib_available": self._anomalib_available,
+                "fallback_reason": self._fallback_reason,
                 "bundle_dir": self.bundle.bundle_dir if self.bundle is not None else "",
                 "metadata": request.metadata,
             },
@@ -104,72 +200,39 @@ class PatchCoreBackend(AnomalyBackend):
         )
 
     def close(self) -> None:
-        self._engine = None
-        self._predict_dataset_cls = None
         self._loaded = False
 
-    def _predict_raw(self, request: Batch2Request, image_bgr: np.ndarray) -> tuple[float, np.ndarray | None]:
-        if self._anomalib_available and self._engine is not None and self._predict_dataset_cls is not None and self.bundle is not None:
+    def _predict_raw(self, request: Batch2Request, image_bgr: np.ndarray) -> tuple[float, np.ndarray | None, str]:
+        if self._anomalib_available and self.bundle is not None:
             try:
-                dataset = self._predict_dataset_cls(path=request.roi_path, image_size=self.config.patchcore.image_size)
-                predictions = self._engine.predict(checkpoint_path=self.bundle.checkpoint_path, dataset=dataset)
-                score = self._extract_score(predictions)
-                anomaly_map = self._extract_map(predictions, image_bgr.shape[:2])
-                return score, anomaly_map
-            except Exception:
-                pass
-        return self._fallback_predict_raw(image_bgr)
+                items = predict_patchcore_paths(
+                    self.bundle.checkpoint_path,
+                    request.roi_path,
+                    image_size=self.config.patchcore.image_size,
+                    center_crop=self.config.patchcore.center_crop,
+                    device=self.config.patchcore.device,
+                    batch_size=1,
+                    num_workers=self.config.patchcore.num_workers,
+                )
+                if items:
+                    return float(items[0]["score"]), items[0]["anomaly_map"], "anomalib_patchcore"
+            except Exception as exc:  # pragma: no cover - fallback path depends on local env
+                self._fallback_reason = f"anomalib_predict_failed:{type(exc).__name__}"
+        return (*self._fallback_predict_raw(image_bgr), "fallback_heuristic")
 
     def _fallback_predict_raw(self, image_bgr: np.ndarray) -> tuple[float, np.ndarray | None]:
         image = cv2.resize(image_bgr, (self.config.patchcore.image_size, self.config.patchcore.image_size))
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         sat = hsv[:, :, 1].astype(np.float32) / 255.0
         val = hsv[:, :, 2].astype(np.float32) / 255.0
-        exg = (2.0 * image[:, :, 1].astype(np.float32) - image[:, :, 2].astype(np.float32) - image[:, :, 0].astype(np.float32)) / 255.0
+        exg = (
+            2.0 * image[:, :, 1].astype(np.float32)
+            - image[:, :, 2].astype(np.float32)
+            - image[:, :, 0].astype(np.float32)
+        ) / 255.0
         anomaly_map = np.clip(np.abs(exg - np.median(exg)) + np.abs(val - np.median(val)) * 0.5 + sat * 0.15, 0.0, 1.0)
         score = float(np.clip(np.percentile(anomaly_map, 97), 0.0, 1.0))
         return score, anomaly_map
-
-    def _extract_score(self, predictions: Any) -> float:
-        if not predictions:
-            return 0.0
-        candidate = predictions[0]
-        for key in ("pred_score", "anomaly_score", "pred_scores"):
-            if hasattr(candidate, key):
-                value = getattr(candidate, key)
-                if isinstance(value, (float, int)):
-                    return float(np.clip(value, 0.0, 1.0))
-                if hasattr(value, "item"):
-                    return float(np.clip(value.item(), 0.0, 1.0))
-        if isinstance(candidate, dict):
-            for key in ("pred_score", "anomaly_score", "pred_scores"):
-                if key in candidate:
-                    value = candidate[key]
-                    if isinstance(value, (float, int)):
-                        return float(np.clip(value, 0.0, 1.0))
-                    if hasattr(value, "item"):
-                        return float(np.clip(value.item(), 0.0, 1.0))
-        return 0.0
-
-    def _extract_map(self, predictions: Any, target_shape: tuple[int, int]) -> np.ndarray | None:
-        if not predictions:
-            return None
-        candidate = predictions[0]
-        for key in ("anomaly_map", "pred_mask"):
-            value = getattr(candidate, key, None)
-            if value is None and isinstance(candidate, dict):
-                value = candidate.get(key)
-            if value is None:
-                continue
-            if hasattr(value, "detach"):
-                value = value.detach().cpu().numpy()
-            if hasattr(value, "numpy"):
-                value = value.numpy()
-            array = np.asarray(value, dtype=np.float32).squeeze()
-            if array.size == 0:
-                continue
-            return cv2.resize(array, (target_shape[1], target_shape[0]))
-        return None
 
     def _thresholds(self) -> tuple[float, float]:
         if self.bundle is None:
@@ -191,9 +254,9 @@ class PatchCoreBackend(AnomalyBackend):
     def _confidence_for_score(self, score: float, lower: float, upper: float) -> float:
         midpoint = (lower + upper) / 2.0
         if score < lower:
-            return float(np.clip((midpoint - score) / max(midpoint, 1e-6), 0.0, 1.0))
+            return float(np.clip((midpoint - score) / max(abs(midpoint), 1e-6), 0.0, 1.0))
         if score > upper:
-            return float(np.clip((score - midpoint) / max(1.0 - midpoint, 1e-6), 0.0, 1.0))
+            return float(np.clip((score - midpoint) / max(abs(score), 1e-6), 0.0, 1.0))
         half_band = max((upper - lower) / 2.0, 1e-6)
         return float(np.clip(abs(score - midpoint) / half_band, 0.0, 1.0) * 0.5)
 
@@ -201,7 +264,7 @@ class PatchCoreBackend(AnomalyBackend):
         output_dir = Path(self.config.batch2.output_root) / image_id
         output_dir.mkdir(parents=True, exist_ok=True)
         output_path = output_dir / f"anomaly_map.{self.config.batch2.anomaly_map_format}"
-        normalized = np.clip(anomaly_map * 255.0, 0.0, 255.0).astype(np.uint8)
+        normalized = cv2.normalize(anomaly_map, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
         colored = cv2.applyColorMap(normalized, cv2.COLORMAP_JET)
         cv2.imwrite(str(output_path), colored)
         return str(output_path)
