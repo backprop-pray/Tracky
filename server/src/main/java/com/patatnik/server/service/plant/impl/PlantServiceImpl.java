@@ -13,12 +13,15 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+
 @Service
 @RequiredArgsConstructor
 public class PlantServiceImpl implements PlantService {
 
     private final PlantRepository plantRepository;
     private final CloudinaryService cloudinaryService;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Override
     public PlantResponse createPlant(Double latitude, Double longitude, MultipartFile image, User user) {
@@ -41,7 +44,16 @@ public class PlantServiceImpl implements PlantService {
 
         plant = plantRepository.save(plant);
 
-        return PlantResponse.fromEntity(plant);
+        PlantResponse response = PlantResponse.fromEntity(plant);
+
+        messagingTemplate.convertAndSendToUser(
+                user.getId().toString(),
+                "/queue/plants",
+                response
+        );
+        System.out.println("THE MESSAGE IS SEND");
+
+        return response;
     }
 
     @Override

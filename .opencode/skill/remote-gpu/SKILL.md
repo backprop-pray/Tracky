@@ -6,6 +6,7 @@ description: Run commands or CUDA-backed Python scripts on the remote GPU box vi
 # GPU Remote Exec
 
 Use this skill to execute commands on the CUDA-capable GPU box at `root@gpu-box`.
+All files should be in the /proj, downloadables and everything. It is the pod volume
 
 ## Core rule
 
