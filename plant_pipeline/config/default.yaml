@@ -1,0 +1,61 @@
+app:
+  name: plant-pipeline
+  environment: dev
+capture:
+  image_format: jpg
+  working_size: 640
+  camera_index: 0
+  simulate: true
+quality:
+  min_blur_score: 90.0
+  min_motion_ratio: 0.18
+  max_motion_ratio: 5.5
+  min_brightness: 45.0
+  max_brightness: 215.0
+  max_dark_fraction: 0.55
+  max_bright_fraction: 0.35
+  min_foreground_fraction: 0.03
+detect:
+  min_prefilter_fraction: 0.04
+  confidence_threshold: 0.55
+  fallback_low_confidence: 0.35
+  centrality_threshold: 0.5
+  bbox_expand_ratio: 0.10
+  input_size: 640
+  model_path: ""
+  labels:
+    - plant
+  model_version: efficientdet-lite0-int8-v1
+anomaly:
+  model_version: patchcore-resnet18-v1
+  backbone: resnet18
+  image_size: 224
+  normal_threshold: 0.35
+  suspicious_threshold: 0.60
+  memory_bank_path: ""
+  embedding_path: ""
+compression:
+  format: webp
+  jpeg_fallback: true
+  thumbnail_max_side: 256
+  review_max_side: 1280
+  roi_max_side: 768
+  webp_quality: 82
+  jpeg_quality: 88
+storage:
+  root_dir: ./data
+  sqlite_path: ./data/pipeline.db
+  debug_artifacts: false
+upload:
+  enabled: false
+  endpoint: http://localhost:8080/api/inspections
+  timeout_seconds: 10
+  retry_base_seconds: 5
+  retry_max_seconds: 300
+  max_attempts: 10
+  wifi_check_host: 8.8.8.8
+  wifi_check_port: 53
+lora:
+  enabled: false
+logging:
+  level: INFO
