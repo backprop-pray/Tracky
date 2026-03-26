@@ -75,6 +75,9 @@ class Batch1ClusterSettings(BaseModel):
     oversized_cluster_penalty_weight: float = 0.80
     border_touch_margin_ratio: float = 0.03
     border_touch_penalty_weight: float = 0.35
+    dense_scene_fallback_min_vegetation_fraction: float = 0.20
+    small_cluster_fallback_min_mean_confidence: float = 0.35
+    small_cluster_fallback_min_score: float = 0.05
     score_weight_confidence: float = 0.5
     score_weight_area: float = 0.3
     score_weight_centrality: float = 0.2

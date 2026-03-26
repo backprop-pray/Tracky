@@ -110,3 +110,24 @@ def test_single_detection_roi_is_expanded_with_context(batch1_config, sharp_plan
         assert result.localization.bbox.height >= int(image_height * batch1_config.cluster.min_final_roi_height_ratio)
     finally:
         service.close()
+
+
+def test_dense_scene_small_cluster_fallback_rescues_roi(batch1_config, sharp_plant_image):
+    detections = [
+        DetectionBox(bbox=BoundingBox(x_min=300, y_min=220, x_max=345, y_max=300), confidence=0.82, label="leaf"),
+    ]
+    batch1_config.cluster.min_cluster_area_ratio = 0.03
+    batch1_config.cluster.dense_scene_fallback_min_vegetation_fraction = 0.10
+    service = Batch1Service(batch1_config, detector_backend=MockDetectorBackend(detections=detections))
+    try:
+        result = service.run(Batch1Request(image_path=str(sharp_plant_image)))
+        assert result.valid
+        assert result.contains_plant
+        assert result.localization is not None
+        assert result.localization.bbox is not None
+        image_width = result.metadata["loaded_image"]["width"]
+        image_height = result.metadata["loaded_image"]["height"]
+        assert result.localization.bbox.width >= int(image_width * batch1_config.cluster.min_final_roi_width_ratio)
+        assert result.localization.bbox.height >= int(image_height * batch1_config.cluster.min_final_roi_height_ratio)
+    finally:
+        service.close()

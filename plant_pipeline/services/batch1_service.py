@@ -127,6 +127,10 @@ class Batch1Service:
         clusters = cluster_detections(filtered, working.shape, self.config.cluster)
         scored_clusters = score_clusters(clusters, working.shape, self.config.cluster)
         selected = select_best_cluster(scored_clusters, self.config.cluster)
+        selected_via_fallback = False
+        if selected is None:
+            selected = self._fallback_small_cluster(scored_clusters, quality)
+            selected_via_fallback = selected is not None
         if selected is None:
             localization = PlantLocalizationResult(
                 contains_plant=False,
@@ -145,7 +149,11 @@ class Batch1Service:
                 metadata={**request.metadata, "loaded_image": image_meta.model_dump(mode="json")},
             )
 
-        context_bbox = gather_single_detection_context(selected, filtered, working.shape, self.config.cluster)
+        context_bbox = (
+            selected.bbox
+            if selected_via_fallback and selected.member_count == 1
+            else gather_single_detection_context(selected, filtered, working.shape, self.config.cluster)
+        )
         scaled = self._scale_bbox(context_bbox, working.shape, full_image.shape)
         expand_ratio = (
             self.config.cluster.single_detection_expand_ratio
@@ -254,6 +262,20 @@ class Batch1Service:
             and frame_coverage >= 0.95
             and vegetation_fraction < 0.01
         )
+
+    def _fallback_small_cluster(self, clusters, quality: QualityResult):
+        vegetation_fraction = quality.diagnostics.vegetation_fraction or 0.0
+        central_vegetation_fraction = quality.diagnostics.central_vegetation_fraction or 0.0
+        scene_vegetation = max(vegetation_fraction, central_vegetation_fraction)
+        if scene_vegetation < self.config.cluster.dense_scene_fallback_min_vegetation_fraction:
+            return None
+        for cluster in clusters:
+            if cluster.mean_confidence < self.config.cluster.small_cluster_fallback_min_mean_confidence:
+                continue
+            if cluster.cluster_score < self.config.cluster.small_cluster_fallback_min_score:
+                continue
+            return cluster
+        return None
 
 
 def build_batch1_service(config_path: str | None = None) -> Batch1Service:

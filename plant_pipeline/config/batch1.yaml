@@ -39,6 +39,9 @@ cluster:
   oversized_cluster_penalty_weight: 0.80
   border_touch_margin_ratio: 0.03
   border_touch_penalty_weight: 0.35
+  dense_scene_fallback_min_vegetation_fraction: 0.20
+  small_cluster_fallback_min_mean_confidence: 0.35
+  small_cluster_fallback_min_score: 0.05
   score_weight_confidence: 0.5
   score_weight_area: 0.3
   score_weight_centrality: 0.2
