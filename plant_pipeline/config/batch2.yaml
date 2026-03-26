@@ -29,6 +29,7 @@ patchcore:
   device: cpu
   model_name: patchcore
   model_version: patchcore-wideresnet50-v1
+  allow_inference_fallback: false
 thresholds:
   lower_threshold:
   upper_threshold:
@@ -36,6 +37,9 @@ thresholds:
   suspicious_percentile: 0.995
   min_gap: 0.05
   confidence_midpoint_weight: 1.0
+  require_bad_validation: true
+  min_val_good_count: 20
+  min_val_bad_count: 20
 api:
   host: 127.0.0.1
   port: 8001

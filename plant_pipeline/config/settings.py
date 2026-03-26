@@ -120,6 +120,7 @@ class Batch2PatchCoreSettings(BaseModel):
     device: str = "cpu"
     model_name: str = "patchcore"
     model_version: str = "patchcore-wideresnet50-v1"
+    allow_inference_fallback: bool = False
 
 
 class Batch2ThresholdSettings(BaseModel):
@@ -129,6 +130,9 @@ class Batch2ThresholdSettings(BaseModel):
     suspicious_percentile: float = 0.995
     min_gap: float = 0.05
     confidence_midpoint_weight: float = 1.0
+    require_bad_validation: bool = True
+    min_val_good_count: int = 20
+    min_val_bad_count: int = 20
 
 
 class Batch2ApiSettings(BaseModel):

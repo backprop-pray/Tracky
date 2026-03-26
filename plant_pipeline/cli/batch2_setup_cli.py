@@ -225,6 +225,8 @@ def main() -> None:
         anomalib_version=_installed_anomalib_version(),
         checkpoint_path=checkpoint_path,
         thresholds_path=thresholds_path,
+        calibration_mode="bad-aware" if bad_scores else "normal-only",
+        score_summary=thresholds.score_summary,
     )
     print(
         json.dumps(

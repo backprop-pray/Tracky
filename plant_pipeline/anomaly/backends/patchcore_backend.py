@@ -69,7 +69,8 @@ def predict_patchcore_paths(
         center_crop=center_crop,
         normalization=normalization,
     )
-    dataset = runtime["InferenceDataset"](path=str(input_path), transform=transform)
+    normalized_input = Path(input_path)
+    dataset = runtime["InferenceDataset"](path=normalized_input, transform=transform)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
     trainer = runtime["pl"].Trainer(
         accelerator=_resolve_lightning_accelerator(device),
@@ -218,6 +219,10 @@ class PatchCoreBackend(AnomalyBackend):
                     return float(items[0]["score"]), items[0]["anomaly_map"], "anomalib_patchcore"
             except Exception as exc:  # pragma: no cover - fallback path depends on local env
                 self._fallback_reason = f"anomalib_predict_failed:{type(exc).__name__}"
+                if not self.config.patchcore.allow_inference_fallback:
+                    raise RuntimeError(
+                        f"Real PatchCore inference failed for {request.roi_path}: {self._fallback_reason}"
+                    ) from exc
         return (*self._fallback_predict_raw(image_bgr), "fallback_heuristic")
 
     def _fallback_predict_raw(self, image_bgr: np.ndarray) -> tuple[float, np.ndarray | None]:

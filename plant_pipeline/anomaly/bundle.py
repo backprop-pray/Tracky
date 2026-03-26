@@ -49,6 +49,8 @@ def write_model_bundle_metadata(
     anomalib_version: str,
     checkpoint_path: Path,
     thresholds_path: Path,
+    calibration_mode: str | None = None,
+    score_summary: dict[str, float] | None = None,
 ) -> Path:
     bundle_dir.mkdir(parents=True, exist_ok=True)
     metadata_path = bundle_dir / "bundle.json"
@@ -64,5 +66,9 @@ def write_model_bundle_metadata(
         "thresholds_path": str(thresholds_path),
         "checkpoint_path": str(checkpoint_path),
     }
+    if calibration_mode is not None:
+        payload["calibration_mode"] = calibration_mode
+    if score_summary is not None:
+        payload["score_summary"] = score_summary
     metadata_path.write_text(json.dumps(payload, indent=2))
     return metadata_path

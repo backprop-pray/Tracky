@@ -23,6 +23,7 @@ def batch2_config(tmp_path: Path):
     config.patchcore.test_good_dir = str(tmp_path / "dataset" / "test" / "good")
     config.patchcore.test_bad_dir = str(tmp_path / "dataset" / "test" / "bad")
     config.patchcore.model_version = "patchcore-test-v1"
+    config.patchcore.allow_inference_fallback = True
     bundle_dir = Path(config.patchcore.bundle_root) / config.patchcore.model_version
     bundle_dir.mkdir(parents=True, exist_ok=True)
     (bundle_dir / "model.ckpt").write_bytes(b"test-checkpoint")

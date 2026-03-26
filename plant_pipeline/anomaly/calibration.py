@@ -18,12 +18,26 @@ def calibrate_thresholds(
 ) -> ThresholdBundle:
     if not val_good_scores:
         raise ValueError("Calibration requires at least one normal validation score.")
+    if len(val_good_scores) < settings.min_val_good_count:
+        raise ValueError(
+            f"Calibration requires at least {settings.min_val_good_count} val/good scores, got {len(val_good_scores)}."
+        )
     good = np.asarray(val_good_scores, dtype=np.float32)
     lower = float(np.quantile(good, settings.normal_percentile))
+    calibration_mode = "normal-only"
     if val_bad_scores:
+        if len(val_bad_scores) < settings.min_val_bad_count:
+            raise ValueError(
+                f"Calibration requires at least {settings.min_val_bad_count} val/bad scores, got {len(val_bad_scores)}."
+            )
+        if len({round(score, 6) for score in val_bad_scores}) < 2:
+            raise ValueError("Calibration rejected val/bad scores because they collapse to fewer than 2 unique values.")
         bad = np.asarray(val_bad_scores, dtype=np.float32)
         upper = float(np.quantile(bad, settings.suspicious_percentile))
+        calibration_mode = "bad-aware"
     else:
+        if settings.require_bad_validation:
+            raise ValueError("Calibration requires val/bad scores for bad-aware thresholding.")
         upper = max(lower + settings.min_gap, float(np.quantile(good, 0.999)))
 
     if upper <= lower:
@@ -38,11 +52,16 @@ def calibrate_thresholds(
         suspicious_percentile=settings.suspicious_percentile,
         calibration_dataset_version=dataset_version,
         score_summary={
+            "calibration_mode": 1.0 if calibration_mode == "bad-aware" else 0.0,
+            "good_count": float(len(val_good_scores)),
             "good_min": float(good.min()),
             "good_max": float(good.max()),
             "good_mean": float(good.mean()),
+            "good_std": float(good.std()),
+            "bad_count": float(len(val_bad_scores)) if val_bad_scores else 0.0,
             "bad_min": float(min(val_bad_scores)) if val_bad_scores else upper,
             "bad_max": float(max(val_bad_scores)) if val_bad_scores else upper,
+            "bad_mean": float(np.asarray(val_bad_scores, dtype=np.float32).mean()) if val_bad_scores else upper,
         },
     )
 
