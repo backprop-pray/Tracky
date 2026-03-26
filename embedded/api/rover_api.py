@@ -50,8 +50,14 @@ class RoverAPI:
     def stop_motors(self):
         self.motor.stop()
 
+    def getframe(self):
+        return self.camera.take_picture()
+
+    def take_picture(self):
+        return self.getframe()
+
     def get_camera_frame(self):
-        return self.camera.get_frame()
+        return self.getframe()
 
     def close(self):
         self.gps.close()

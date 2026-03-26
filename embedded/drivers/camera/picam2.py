@@ -48,6 +48,9 @@ class PiCam2FrameDriver:
         with self._lock:
             return self._camera.capture_array()
 
+    def take_picture(self):
+        return self.get_frame()
+
     def close(self):
         with self._lock:
             if not self._running or self._camera is None:
