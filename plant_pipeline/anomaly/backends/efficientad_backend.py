@@ -407,6 +407,11 @@ class EfficientAdBackend(AnomalyBackend):
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+        bgr_float = image.astype(np.float32)
+        blue = bgr_float[:, :, 0]
+        green = bgr_float[:, :, 1]
+        red = bgr_float[:, :, 2]
+        exg = (2.0 * green) - red - blue
 
         green_mask = cv2.inRange(
             hsv,
@@ -450,39 +455,80 @@ class EfficientAdBackend(AnomalyBackend):
                 leaf_mask = filled
 
         leaf_area_ratio = float(np.count_nonzero(leaf_mask)) / float(leaf_mask.size)
+        leaf_pixels = int(np.count_nonzero(leaf_mask))
         if leaf_area_ratio > 0:
-            lesion_seed = cv2.bitwise_or(cv2.bitwise_or(yellow_mask, brown_mask), cv2.bitwise_or(rust_mask, necrosis_mask))
+            healthy_green_core = (((green_mask > 0) | (exg > 28.0)) & (hsv[:, :, 1] > 20)).astype(np.uint8) * 255
+            warm_color_seed = cv2.bitwise_or(cv2.bitwise_or(yellow_mask, brown_mask), rust_mask)
+            warm_color_seed = cv2.bitwise_and(warm_color_seed, cv2.bitwise_not(healthy_green_core))
+            warm_color_seed = cv2.bitwise_and(warm_color_seed, cv2.threshold(hsv[:, :, 2], 55, 255, cv2.THRESH_BINARY)[1])
+            necrosis_core = cv2.bitwise_and(necrosis_mask, cv2.bitwise_not(healthy_green_core))
+            necrosis_core = cv2.bitwise_and(necrosis_core, cv2.threshold(gray, 120, 255, cv2.THRESH_BINARY_INV)[1])
+            lesion_seed = cv2.bitwise_or(warm_color_seed, necrosis_core)
             lesion_mask = cv2.bitwise_and(lesion_seed, lesion_seed, mask=leaf_mask)
             lesion_mask = cv2.morphologyEx(lesion_mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8), iterations=1)
             lesion_mask = cv2.morphologyEx(lesion_mask, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8), iterations=1)
+
+            filtered_mask = np.zeros_like(lesion_mask)
+            component_count = 0
+            min_component_area = max(24, int(leaf_pixels * 0.003))
+            num_labels, labels, stats, _ = cv2.connectedComponentsWithStats((lesion_mask > 0).astype(np.uint8), connectivity=8)
+            raw_component_count = max(0, num_labels - 1)
+            largest_raw_component = 0
+            for label_idx in range(1, num_labels):
+                area = int(stats[label_idx, cv2.CC_STAT_AREA])
+                largest_raw_component = max(largest_raw_component, area)
+                if area < min_component_area:
+                    continue
+                filtered_mask[labels == label_idx] = 255
+                component_count += 1
+            lesion_mask = filtered_mask
         else:
             lesion_mask = np.zeros_like(leaf_mask)
+            component_count = 0
+            raw_component_count = 0
+            largest_raw_component = 0
 
-        lesion_ratio = float(np.count_nonzero(lesion_mask)) / float(max(np.count_nonzero(leaf_mask), 1))
-        green_ratio = float(np.count_nonzero(cv2.bitwise_and(green_mask, green_mask, mask=leaf_mask))) / float(max(np.count_nonzero(leaf_mask), 1))
-        edge_density = float(np.count_nonzero(cv2.Canny(gray, 60, 140) & lesion_mask)) / float(max(np.count_nonzero(leaf_mask), 1))
+        raw_lesion_ratio = float(np.count_nonzero(lesion_seed)) / float(max(leaf_pixels, 1)) if leaf_area_ratio > 0 else 0.0
+        lesion_ratio = float(np.count_nonzero(lesion_mask)) / float(max(leaf_pixels, 1))
+        green_ratio = float(np.count_nonzero(cv2.bitwise_and(green_mask, green_mask, mask=leaf_mask))) / float(max(leaf_pixels, 1))
+        edge_density = float(np.count_nonzero(cv2.Canny(gray, 60, 140) & lesion_mask)) / float(max(leaf_pixels, 1))
         a_channel = lab[:, :, 1].astype(np.float32)
         b_channel = lab[:, :, 2].astype(np.float32)
         warm_bias = float(np.mean(((b_channel - a_channel) > 8)[leaf_mask > 0])) if np.count_nonzero(leaf_mask) else 0.0
+        shadow_ratio = float(np.count_nonzero((gray < 85) & (leaf_mask > 0) & (lesion_mask == 0))) / float(max(leaf_pixels, 1))
+        green_strength = float(np.mean(np.clip(exg[leaf_mask > 0], -255.0, 255.0))) if leaf_pixels else 0.0
+        largest_raw_component_ratio = float(largest_raw_component) / float(max(leaf_pixels, 1))
 
         lesion_score = (
-            lesion_ratio * 2.6
-            + edge_density * 3.5
-            + max(0.0, warm_bias - 0.15) * 0.5
-            + max(0.0, 0.65 - green_ratio) * 0.6
+            lesion_ratio * 3.2
+            + edge_density * 1.6
+            + max(0.0, warm_bias - 0.55) * 0.30
+            + max(0.0, 0.58 - green_ratio) * 0.35
+            + max(0.0, 0.12 - green_strength / 255.0) * 0.25
         )
         lesion_score = float(np.clip(lesion_score, 0.0, 1.0))
 
         weak_leaf_mask = leaf_area_ratio < settings.min_leaf_coverage_for_confident_scoring
+        broad_scene_override = leaf_area_ratio >= 0.80 and green_ratio < 0.55 and shadow_ratio >= 0.25 and raw_component_count >= 30
         if leaf_area_ratio < settings.leaf_min_area_ratio:
             lesion_score = max(lesion_score, 0.30)
         elif weak_leaf_mask and settings.uncertain_on_weak_leaf_mask:
             lesion_score = float(np.clip(max(lesion_score, 0.30), 0.20, 0.44))
         else:
-            if lesion_ratio <= settings.normal_max_lesion_ratio and green_ratio >= 0.50:
+            if broad_scene_override:
                 lesion_score = min(lesion_score, 0.18)
+            if lesion_ratio <= settings.normal_max_lesion_ratio and green_ratio >= 0.60 and component_count <= 2:
+                lesion_score = min(lesion_score, 0.18)
+            if green_ratio >= 0.70 and lesion_ratio <= 0.05 and shadow_ratio >= 0.18:
+                lesion_score = min(lesion_score, 0.12)
+            elif green_ratio >= 0.58 and lesion_ratio <= 0.08 and component_count <= 2:
+                lesion_score = min(lesion_score, 0.18)
+            if green_ratio >= 0.85 and raw_lesion_ratio >= 0.02 and largest_raw_component_ratio >= 0.008:
+                lesion_score = max(lesion_score, 0.58)
             if lesion_ratio >= settings.suspicious_min_lesion_ratio:
                 lesion_score = max(lesion_score, 0.55)
+            if broad_scene_override:
+                lesion_score = min(lesion_score, 0.18)
 
         lesion_heatmap = (
             lesion_mask.astype(np.float32) / 255.0 * 0.75
@@ -492,9 +538,15 @@ class EfficientAdBackend(AnomalyBackend):
         return lesion_score, lesion_heatmap, "deterministic_lesion_scorer", {
             "leaf_area_ratio": leaf_area_ratio,
             "lesion_ratio": lesion_ratio,
+            "raw_lesion_ratio": raw_lesion_ratio,
             "green_ratio": green_ratio,
             "edge_density": edge_density,
             "warm_bias": warm_bias,
+            "shadow_ratio": shadow_ratio,
+            "green_strength": green_strength,
+            "lesion_component_count": component_count,
+            "raw_component_count": raw_component_count,
+            "largest_raw_component_ratio": largest_raw_component_ratio,
             "weak_leaf_mask": weak_leaf_mask,
         }
 

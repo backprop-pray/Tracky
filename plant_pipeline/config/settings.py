@@ -65,7 +65,7 @@ class Batch1ClusterSettings(BaseModel):
     merge_iou_threshold: float = 0.15
     merge_distance_threshold: float = 0.03
     min_cluster_members: int = 1
-    min_cluster_area_ratio: float = 0.01
+    min_cluster_area_ratio: float = 0.008
     bbox_expand_ratio: float = 0.06
     single_detection_expand_ratio: float = 0.18
     single_detection_context_distance_ratio: float = 0.12
@@ -75,7 +75,7 @@ class Batch1ClusterSettings(BaseModel):
     oversized_cluster_penalty_weight: float = 0.80
     border_touch_margin_ratio: float = 0.03
     border_touch_penalty_weight: float = 0.35
-    dense_scene_fallback_min_vegetation_fraction: float = 0.20
+    dense_scene_fallback_min_vegetation_fraction: float = 0.10
     small_cluster_fallback_min_mean_confidence: float = 0.35
     small_cluster_fallback_min_score: float = 0.05
     score_weight_confidence: float = 0.5
