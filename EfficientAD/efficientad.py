@@ -17,10 +17,10 @@ from sklearn.metrics import roc_auc_score
 def get_argparse():
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--dataset', default='mvtec_ad',
-                        choices=['mvtec_ad', 'mvtec_loco'])
+                        choices=['mvtec_ad', 'mvtec_loco', 'plants'])
     parser.add_argument('-s', '--subdataset', default='bottle',
-                        help='One of 15 sub-datasets of Mvtec AD or 5' +
-                             'sub-datasets of Mvtec LOCO')
+                        help='One of 15 sub-datasets of Mvtec AD or 5 ' +
+                             'sub-datasets of Mvtec LOCO, or a plant name like "Tomato"')
     parser.add_argument('-o', '--output_dir', default='output/1')
     parser.add_argument('-m', '--model_size', default='small',
                         choices=['small', 'medium'])
@@ -36,6 +36,9 @@ def get_argparse():
     parser.add_argument('-b', '--mvtec_loco_path',
                         default='./mvtec_loco_anomaly_detection',
                         help='Downloaded Mvtec LOCO dataset')
+    parser.add_argument('-p', '--plants_path',
+                        default=r'W:\Papers\patatnik\data\mvtec_plants',
+                        help='Downloaded and formatted plant datasets')
     parser.add_argument('-t', '--train_steps', type=int, default=70000)
     return parser.parse_args()
 
@@ -71,6 +74,8 @@ def main():
         dataset_path = config.mvtec_ad_path
     elif config.dataset == 'mvtec_loco':
         dataset_path = config.mvtec_loco_path
+    elif config.dataset == 'plants':
+        dataset_path = config.plants_path
     else:
         raise Exception('Unknown config.dataset')
 
@@ -83,8 +88,8 @@ def main():
                                     config.dataset, config.subdataset)
     test_output_dir = os.path.join(config.output_dir, 'anomaly_maps',
                                    config.dataset, config.subdataset, 'test')
-    os.makedirs(train_output_dir)
-    os.makedirs(test_output_dir)
+    os.makedirs(train_output_dir, exist_ok=True)
+    os.makedirs(test_output_dir, exist_ok=True)
 
     # load data
     full_train_set = ImageFolderWithoutTarget(
@@ -92,7 +97,7 @@ def main():
         transform=transforms.Lambda(train_transform))
     test_set = ImageFolderWithPath(
         os.path.join(dataset_path, config.subdataset, 'test'))
-    if config.dataset == 'mvtec_ad':
+    if config.dataset in ['mvtec_ad', 'plants']:
         # mvtec dataset paper recommend 10% validation set
         train_size = int(0.9 * len(full_train_set))
         validation_size = len(full_train_set) - train_size
@@ -111,7 +116,7 @@ def main():
 
 
     train_loader = DataLoader(train_set, batch_size=1, shuffle=True,
-                              num_workers=4, pin_memory=True)
+                              num_workers=0, pin_memory=True)
     train_loader_infinite = InfiniteDataloader(train_loader)
     validation_loader = DataLoader(validation_set, batch_size=1)
 
@@ -128,7 +133,7 @@ def main():
         penalty_set = ImageFolderWithoutTarget(config.imagenet_train_path,
                                                transform=penalty_transform)
         penalty_loader = DataLoader(penalty_set, batch_size=1, shuffle=True,
-                                    num_workers=4, pin_memory=True)
+                                    num_workers=0, pin_memory=True)
         penalty_loader_infinite = InfiniteDataloader(penalty_loader)
     else:
         penalty_loader_infinite = itertools.repeat(None)
@@ -293,7 +298,23 @@ def test(test_set, teacher, student, autoencoder, teacher_mean, teacher_std,
         y_score_image = np.max(map_combined)
         y_true.append(y_true_image)
         y_score.append(y_score_image)
+        
     auc = roc_auc_score(y_true=y_true, y_score=y_score)
+    
+    # 0.45 Strict Threshold Evaluation
+    threshold = 0.15
+    predictions = [1 if score >= threshold else 0 for score in y_score]
+    correct_good = sum(1 for p, t in zip(predictions, y_true) if t == 0 and p == 0)
+    total_good = sum(1 for t in y_true if t == 0)
+    correct_defect = sum(1 for p, t in zip(predictions, y_true) if t == 1 and p == 1)
+    total_defect = sum(1 for t in y_true if t == 1)
+    
+    good_acc = (correct_good / total_good * 100) if total_good > 0 else 0.0
+    defect_acc = (correct_defect / total_defect * 100) if total_defect > 0 else 0.0
+    overall_acc = ((correct_good + correct_defect) / len(y_true) * 100) if len(y_true) > 0 else 0.0
+    
+    print(f"\n[Validation Thr={threshold}] Overall Acc: {overall_acc:.2f}% | Healthy Acc: {good_acc:.2f}% ({correct_good}/{total_good}) | Diseased Acc: {defect_acc:.2f}% ({correct_defect}/{total_defect})\n")
+
     return auc * 100
 
 @torch.no_grad()

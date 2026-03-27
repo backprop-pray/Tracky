@@ -13,3 +13,8 @@ plant_pipeline/test_images/
 
 # Allow EfficientAD weights
 !EfficientAD/models/
+
+/dist/
+PlantDoc/
+PlantVillage/
+anomaly_maps/
