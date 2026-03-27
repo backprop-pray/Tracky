@@ -38,7 +38,7 @@ efficientad:
   max_epochs: 200
   max_steps: 70000
   seed: 42
-  use_deterministic_demo_scorer: true
+  use_deterministic_demo_scorer: false
   deterministic_enabled: true
   leaf_min_area_ratio: 0.08
   min_leaf_coverage_for_confident_scoring: 0.18

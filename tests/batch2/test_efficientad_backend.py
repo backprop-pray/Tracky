@@ -123,13 +123,14 @@ def test_efficientad_raw_bundle_missing_stats_fails_fast(efficientad_config):
 def test_efficientad_raw_bundle_returns_structured_result(efficientad_config, good_roi):
     bundle_dir = Path(efficientad_config.efficientad.bundle_root) / efficientad_config.efficientad.model_version
     _write_raw_bundle(efficientad_config, bundle_dir, include_stats=True)
+    efficientad_config.efficientad.use_deterministic_demo_scorer = False
     backend = EfficientAdBackend(efficientad_config)
     backend.load()
     result = backend.predict(Batch2Request(image_id="img-raw-1", roi_path=str(good_roi)))
     assert result.image_id == "img-raw-1"
     assert result.model_name == efficientad_config.efficientad.model_name
     assert result.model_version == efficientad_config.efficientad.model_version
-    assert result.debug["backend_mode"] == "deterministic_lesion_scorer"
+    assert result.debug["backend_mode"] == "repo_efficientad_raw"
     assert isinstance(result.suspicious_score, float)
     backend.close()
 

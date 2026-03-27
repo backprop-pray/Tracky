@@ -158,7 +158,7 @@ class Batch2EfficientAdSettings(BaseModel):
     max_epochs: int = 200
     max_steps: int = 70000
     seed: int = 42
-    use_deterministic_demo_scorer: bool = True
+    use_deterministic_demo_scorer: bool = False
     deterministic_enabled: bool = True
     leaf_min_area_ratio: float = 0.08
     min_leaf_coverage_for_confident_scoring: float = 0.18

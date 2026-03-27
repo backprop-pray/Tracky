@@ -74,6 +74,8 @@ def efficientad_config(tmp_path: Path):
     config.efficientad.teacher_weights_dir = str(tmp_path / "external" / "efficientad" / "pre_trained")
     config.efficientad.imagenette_dir = str(tmp_path / "external" / "efficientad" / "imagenette")
     config.efficientad.model_version = "efficientad-test-v1"
+    config.efficientad.use_deterministic_demo_scorer = True
+    config.efficientad.deterministic_enabled = True
     bundle_dir = Path(config.efficientad.bundle_root) / config.efficientad.model_version
     bundle_dir.mkdir(parents=True, exist_ok=True)
     (bundle_dir / "model.ckpt").write_bytes(b"efficientad-checkpoint")
