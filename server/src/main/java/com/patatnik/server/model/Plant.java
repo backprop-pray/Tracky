@@ -29,6 +29,9 @@ public class Plant {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    @OneToOne(mappedBy = "plant", fetch = FetchType.LAZY)
+    private ProcessedPlant processedPlant;
+
     @Column(nullable = false, updatable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
