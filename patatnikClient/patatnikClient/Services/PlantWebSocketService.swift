@@ -2,6 +2,7 @@ import Foundation
 
 nonisolated struct RecommendationMessage: Codable, Sendable {
     let plantId: Int
+    let processedPlantId: Int?
     let disease: String
     let text: String
 }
@@ -12,7 +13,7 @@ final class PlantWebSocketService {
     private init() {}
 
     var onPlantReceived: ((Plant) -> Void)?
-    var onRecommendationReceived: ((Int, String, String) -> Void)?
+    var onRecommendationReceived: ((Int, Int?, String, String) -> Void)?
 
     private var webSocketTask: URLSessionWebSocketTask?
     private var isConnected = false
@@ -272,12 +273,20 @@ final class PlantWebSocketService {
         do {
             let msg = try JSONDecoder().decode(RecommendationMessage.self, from: data)
             print("[WS] Recommendation received for plant \(msg.plantId): \(msg.disease)")
+            
+            // Always persist the recommendation data, even if no listener is attached
+            UserDefaults.standard.set(msg.disease, forKey: "plant_\(msg.plantId)_disease")
+            UserDefaults.standard.set(msg.text, forKey: "plant_\(msg.plantId)_recommendation")
+            if let processedPlantId = msg.processedPlantId {
+                UserDefaults.standard.set(processedPlantId, forKey: "plant_\(msg.plantId)_processed_plant_id")
+            }
+            print("[WS] Cached recommendation for plant \(msg.plantId)")
 
             if let callback = onRecommendationReceived {
-                callback(msg.plantId, msg.disease, msg.text)
+                callback(msg.plantId, msg.processedPlantId, msg.disease, msg.text)
                 print("[WS] onRecommendationReceived callback fired")
             } else {
-                print("[WS] onRecommendationReceived callback is nil — no listener attached!")
+                print("[WS] onRecommendationReceived callback is nil — recommendation cached for later")
             }
         } catch {
             print("[WS] Failed to decode recommendation: \(error)")

@@ -78,6 +78,50 @@ actor APIClient {
             throw APIError.serverError(http.statusCode, "")
         }
     }
+    
+    func patch<B: Encodable & Sendable, T: Decodable & Sendable>(endpoint: String, body: B, requiresAuth: Bool = false, baseURL: String? = nil) async throws -> T {
+        let base = baseURL ?? AppConfig.baseURL
+        guard let url = URL(string: "\(base)\(endpoint)") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        if requiresAuth {
+            guard let token else {
+                throw APIError.serverError(401, "Not authenticated.")
+            }
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            throw APIError.networkError
+        }
+
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.networkError
+        }
+
+        guard (200...299).contains(http.statusCode) else {
+            if let body = try? JSONDecoder().decode(APIErrorBody.self, from: data) {
+                throw APIError.serverError(http.statusCode, body.message)
+            }
+            throw APIError.serverError(http.statusCode, "")
+        }
+
+        do {
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch {
+            throw APIError.decodingError(error.localizedDescription)
+        }
+    }
 
     func get<T: Decodable & Sendable>(endpoint: String, requiresAuth: Bool = false) async throws -> APIEnvelope<T> {
         let baseURL = AppConfig.baseURL

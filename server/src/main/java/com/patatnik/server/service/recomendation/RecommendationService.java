@@ -48,6 +48,7 @@ public class RecommendationService {
                 return;
             }
 
+            Object processedPlantId = response.get("processed_plant_id");
             String text = (String) response.get("text");
             String disease = (String) response.getOrDefault("disease", "");
 
@@ -56,6 +57,7 @@ public class RecommendationService {
 
             // Push to user via WebSocket
             Map<String, Object> payload = new HashMap<>();
+            payload.put("processedPlantId", processedPlantId);
             payload.put("plantId", plant.getId());
             payload.put("disease", disease);
             payload.put("text", text);

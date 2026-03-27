@@ -361,10 +361,10 @@ struct OpinionInputView: View {
                         .font(.system(size: 20))
                         .foregroundStyle(.green)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Thank you for your feedback")
+                        Text("Recommendation updated!")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(.primary)
-                        Text("Your diagnosis has been recorded and will help improve our AI")
+                        Text("The treatment has been corrected and will help improve our AI")
                             .font(.system(size: 12, weight: .regular))
                             .foregroundStyle(.secondary)
                     }
@@ -386,12 +386,12 @@ struct OpinionInputView: View {
                     Image(systemName: "pencil.line")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(Color.appOrange)
-                    Text("Your Diagnosis")
+                    Text("Provide Correct Solution")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(.primary)
                 }
 
-                Text("How would you treat this plant?")
+                Text("What's the correct diagnosis and treatment?")
                     .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(.secondary)
 
@@ -419,9 +419,19 @@ struct OpinionInputView: View {
                         .background(.clear)
                         .scrollContentBackground(.hidden)
                         .focused($isFocused)
+                        .toolbar {
+                            ToolbarItemGroup(placement: .keyboard) {
+                                Spacer()
+                                Button("Done") {
+                                    isFocused = false
+                                }
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(Color.appOrange)
+                            }
+                        }
 
                     if viewModel.userOpinion.isEmpty {
-                        Text("e.g. Apply fungicide spray weekly...")
+                        Text("e.g. Rotate crops every 4 years, keep leaves dry, remove infected plants quickly...")
                             .font(.system(size: 15, weight: .regular))
                             .foregroundStyle(.secondary.opacity(0.6))
                             .padding(14)
@@ -439,8 +449,8 @@ struct OpinionInputView: View {
                             ProgressView().tint(.white)
                         } else {
                             HStack(spacing: 8) {
-                                Image(systemName: "paperplane.fill")
-                                Text("Submit Diagnosis")
+                                Image(systemName: "checkmark.circle.fill")
+                                Text("Submit Correction")
                             }
                         }
                     }
@@ -454,7 +464,13 @@ struct OpinionInputView: View {
                                 viewModel.userOpinion.trimmingCharacters(
                                     in: .whitespaces).isEmpty
                                     ? Color.appSecondary
-                                    : Color.appDark
+                                    : Color.appOrange
+                            )
+                            .shadow(
+                                color: viewModel.userOpinion.trimmingCharacters(in: .whitespaces).isEmpty
+                                    ? .clear
+                                    : Color.appOrange.opacity(0.35),
+                                radius: 10, y: 4
                             )
                     )
                 }
