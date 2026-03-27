@@ -166,7 +166,7 @@ def resolve_reference(hit_path: str, hit_name: str) -> ReferenceRecommendation |
 def upsert_processed_plant(
     plant_id: int,
     recommendation: ReferenceRecommendation,
-) -> None:
+) -> int:
     with open_db_connection() as conn, conn.cursor() as cur:
         cur.execute(
             "SELECT id FROM public.processed_plants "
@@ -188,7 +188,7 @@ def upsert_processed_plant(
                 ),
             )
             conn.commit()
-            return
+            return int(row[0])
 
         cur.execute(
             "INSERT INTO public.processed_plants "
@@ -202,8 +202,18 @@ def upsert_processed_plant(
                 recommendation.recommended_action_user_id,
             ),
         )
+        cur.execute(
+            "SELECT id FROM public.processed_plants "
+            "WHERE plant_id = %s AND disease IS NOT DISTINCT FROM %s "
+            "ORDER BY id DESC LIMIT 1",
+            (plant_id, recommendation.disease),
+        )
+        inserted_row = cur.fetchone()
 
         conn.commit()
+        if not inserted_row:
+            raise RuntimeError("Failed to resolve processed plant id after insert")
+        return int(inserted_row[0])
 
 
 def refresh_reference_catalog() -> None:
@@ -323,6 +333,7 @@ class MobileRecommendationRequest(BaseModel):
     image_url: str
 
 class MobileRecommendationResponse(BaseModel):
+    processed_plant_id: int
     plant_id: int
     disease: str
     text: str
@@ -368,11 +379,12 @@ async def mobile_recommendation(payload: MobileRecommendationRequest) -> MobileR
         raise HTTPException(status_code=404, detail="No recommendation in processed_plants for top match")
 
     try:
-        upsert_processed_plant(payload.plant_id, resolved)
+        processed_plant_id = upsert_processed_plant(payload.plant_id, resolved)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to persist processed plant: {exc}") from exc
 
     return MobileRecommendationResponse(
+        processed_plant_id=processed_plant_id,
         plant_id=payload.plant_id,
         disease=resolved.disease,
         text=resolved.recommendation,
