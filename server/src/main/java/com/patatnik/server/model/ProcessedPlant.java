@@ -36,4 +36,10 @@ public class ProcessedPlant {
     @Column(name = "created_at", nullable = false, updatable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    private Boolean status;
+
+    public void changeStatus() {
+        this.status = this.status == null || !this.status;
+    }
 }
