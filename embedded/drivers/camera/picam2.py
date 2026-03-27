@@ -1,14 +1,17 @@
 import threading
 import time
 
+import numpy as np
+
 from picamera2 import Picamera2
 
 
 class PiCam2FrameDriver:
-    def __init__(self, size=(640, 480), pixel_format='RGB888', warmup_seconds=0.2):
+    def __init__(self, size=(640, 480), pixel_format='RGB888', warmup_seconds=0.2, vflip=False):
         self.size = size
         self.pixel_format = pixel_format
         self.warmup_seconds = warmup_seconds
+        self.vflip = vflip
 
         self._camera = None
         self._running = False
@@ -46,7 +49,10 @@ class PiCam2FrameDriver:
             self.open()
 
         with self._lock:
-            return self._camera.capture_array()
+            frame = self._camera.capture_array()
+            if self.vflip:
+                frame = np.flipud(frame)
+            return frame
 
     def take_picture(self):
         return self.get_frame()

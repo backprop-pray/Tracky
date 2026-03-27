@@ -7,6 +7,9 @@ M1_IN1 = 20
 M1_IN2 = 21
 M2_IN1 = 16
 M2_IN2 = 12
+M1_PWM = 19
+M2_PWM = 13
+PWM_FREQ_HZ = 100
 STEP_SECONDS = 2.0
 
 
@@ -16,15 +19,21 @@ def main():
         m1_in2=M1_IN2,
         m2_in1=M2_IN1,
         m2_in2=M2_IN2,
+        m1_pwm=M1_PWM,
+        m2_pwm=M2_PWM,
+        pwm_frequency_hz=PWM_FREQ_HZ,
     )
 
     try:
-        driver.set_both_forward()
-        print(f'Both forward: M1({M1_IN1}=H, {M1_IN2}=L) M2({M2_IN1}=H, {M2_IN2}=L)')
+        driver.set_both_forward(speed=70)
+        print(
+            f'Both forward @70%: M1 dir({M1_IN1},{M1_IN2}) pwm({M1_PWM}) '
+            f'M2 dir({M2_IN1},{M2_IN2}) pwm({M2_PWM})'
+        )
         time.sleep(STEP_SECONDS)
 
-        driver.set_both_reverse()
-        print(f'Both reverse: M1({M1_IN1}=L, {M1_IN2}=H) M2({M2_IN1}=L, {M2_IN2}=H)')
+        driver.set_both_reverse(speed=70)
+        print('Both reverse @70%')
         time.sleep(STEP_SECONDS)
     finally:
         driver.cleanup()

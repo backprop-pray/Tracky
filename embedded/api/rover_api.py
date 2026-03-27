@@ -12,6 +12,8 @@ class RoverAPI:
         gps_fallback_file='/home/yasen/gps_fallback.env',
         left_motor_pins=(20, 21),
         right_motor_pins=(16, 12),
+        motor_pwm_pins=(19, 13),
+        motor_pwm_frequency_hz=100,
         ultrasonic1_pins=(23, 24),
         ultrasonic2_pins=(27, 17),
         ultrasonic3_pins=(5, 6),
@@ -30,6 +32,9 @@ class RoverAPI:
             left_in2=left_motor_pins[1],
             right_in1=right_motor_pins[0],
             right_in2=right_motor_pins[1],
+            left_pwm_pin=motor_pwm_pins[0],
+            right_pwm_pin=motor_pwm_pins[1],
+            pwm_frequency_hz=motor_pwm_frequency_hz,
         )
         self.camera = PiCam2FrameDriver()
 
@@ -44,11 +49,22 @@ class RoverAPI:
             return self.ultrasonic.read_all(timeout_seconds=timeout_seconds)
         return self.ultrasonic.read_sensor(sensor_id=sensor_id, timeout_seconds=timeout_seconds)
 
-    def set_motor(self, side, direction):
-        return self.motor.set_motor(side=side, direction=direction)
+    def set_motor(self, side, direction, speed=100):
+        return self.motor.set_motor(side=side, direction=direction, speed=speed)
 
-    def drive(self, left_direction, right_direction):
-        return self.motor.drive(left_direction=left_direction, right_direction=right_direction)
+    def drive(self, left_direction, right_direction, left_speed=100, right_speed=100):
+        return self.motor.drive(
+            left_direction=left_direction,
+            right_direction=right_direction,
+            left_speed=left_speed,
+            right_speed=right_speed,
+        )
+
+    def set_motor_speed(self, side, speed):
+        return self.motor.set_speed(side=side, speed=speed)
+
+    def set_motor_speeds(self, left_speed, right_speed):
+        return self.motor.set_speeds(left_speed=left_speed, right_speed=right_speed)
 
     def stop_motors(self):
         self.motor.stop()
