@@ -55,10 +55,6 @@ class SearchResponse(BaseModel):
 
 
 def parse_db_settings() -> dict[str, str | int]:
-    direct_dsn = os.getenv("KNOWLEDGE_DATABASE_URL") or os.getenv("DATABASE_URL")
-    if direct_dsn:
-        return {"dsn": direct_dsn}
-
     spring_url = os.getenv("SPRING_DATASOURCE_URL", "").strip()
     spring_user = os.getenv("SPRING_DATASOURCE_USERNAME", "").strip()
     spring_password = os.getenv("SPRING_DATASOURCE_PASSWORD", "").strip()
@@ -69,7 +65,11 @@ def parse_db_settings() -> dict[str, str | int]:
     parsed = urlparse(spring_url)
     if parsed.scheme != "postgresql" or not parsed.hostname or not parsed.path:
         raise RuntimeError(
-            "Database configuration missing. Set KNOWLEDGE_DATABASE_URL or Spring datasource env vars."
+            "Database configuration missing. Set Spring datasource env vars."
+        )
+    if not spring_user or not spring_password:
+        raise RuntimeError(
+            "Database configuration missing. Set SPRING_DATASOURCE_USERNAME and SPRING_DATASOURCE_PASSWORD."
         )
 
     return {
@@ -85,9 +85,6 @@ DB_SETTINGS = parse_db_settings()
 
 
 def open_db_connection() -> psycopg.Connection:
-    dsn = DB_SETTINGS.get("dsn")
-    if isinstance(dsn, str):
-        return psycopg.connect(dsn)
     return psycopg.connect(
         host=DB_SETTINGS["host"],
         port=DB_SETTINGS["port"],
