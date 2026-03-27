@@ -210,31 +210,60 @@ struct PlantRecommendationView: View {
                     )
                     .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.spring(response: 0.5, dampingFraction: 0.8)))
                 } else {
-                    // Rejected - show input prompt
-                    VStack(alignment: .leading, spacing: 8) {
+                    // Rejected - show different message based on whether opinion was submitted
+                    if viewModel.opinionSubmitted {
+                        // Thank you message after rejection + opinion submission
                         HStack(spacing: 8) {
-                            Image(systemName: "info.circle.fill")
-                                .font(.system(size: 16))
-                                .foregroundStyle(Color.appOrange)
-                            Text("Help us improve")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(.primary)
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 20))
+                                .foregroundStyle(.green)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Thank you again!")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(.primary)
+                                Text("Your diagnosis helps us improve our recommendations")
+                                    .font(.system(size: 12, weight: .regular))
+                                    .foregroundStyle(.secondary)
+                            }
                         }
-                        Text("Share your diagnosis below")
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundStyle(.secondary)
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(Color.green.opacity(0.06))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .stroke(Color.green.opacity(0.15), lineWidth: 1)
+                                )
+                        )
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.spring(response: 0.5, dampingFraction: 0.8)))
+                    } else {
+                        // Rejected - show input prompt (prompting user to provide feedback)
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "info.circle.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(Color.appOrange)
+                                Text("Help us improve")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundStyle(.primary)
+                            }
+                            Text("Please share what's wrong and your diagnosis below")
+                                .font(.system(size: 12, weight: .regular))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.appOrange.opacity(0.06))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.appOrange.opacity(0.15), lineWidth: 1)
+                                )
+                        )
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.spring(response: 0.5, dampingFraction: 0.8)))
                     }
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.appOrange.opacity(0.06))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.appOrange.opacity(0.15), lineWidth: 1)
-                            )
-                    )
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.spring(response: 0.5, dampingFraction: 0.8)))
                 }
             }
         }
