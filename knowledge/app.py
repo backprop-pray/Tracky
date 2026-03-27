@@ -291,6 +291,38 @@ def update_processed_plant_recommendation(
     return row_id, plant_id, disease, text
 
 
+def get_processed_plant_view(processed_plant_id: int) -> ProcessedPlantViewResponse:
+    query = (
+        "SELECT id, status, COALESCE(disease, ''), recommended_action "
+        "FROM public.processed_plants WHERE id = %s"
+    )
+
+    with open_db_connection() as conn, conn.cursor() as cur:
+        cur.execute(query, (processed_plant_id,))
+        row = cur.fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="processed_plant not found")
+
+    row_id = int(row[0])
+    status_value = row[1]
+    disease = row[2]
+    recommendation = row[3]
+
+    if status_value is True:
+        return ProcessedPlantViewResponse(
+            status=True,
+            processed_plant_id=row_id,
+        )
+
+    return ProcessedPlantViewResponse(
+        status=False,
+        processed_plant_id=row_id,
+        disease=disease,
+        recommendation=recommendation,
+    )
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     global has_health_status_column
@@ -353,6 +385,13 @@ class UpdateProcessedPlantRecommendationResponse(BaseModel):
     disease: str
     text: str
 
+
+class ProcessedPlantViewResponse(BaseModel):
+    status: bool
+    processed_plant_id: int
+    disease: str | None = None
+    recommendation: str | None = None
+
 @app.post("/mobile/recommendation", response_model=MobileRecommendationResponse)
 async def mobile_recommendation(payload: MobileRecommendationRequest) -> MobileRecommendationResponse:
     rag = get_index()
@@ -403,6 +442,14 @@ def update_recommendation(
         disease=disease,
         text=text,
     )
+
+
+@app.get(
+    "/processed-plants/{processed_plant_id}",
+    response_model=ProcessedPlantViewResponse,
+)
+def get_processed_plant(processed_plant_id: int) -> ProcessedPlantViewResponse:
+    return get_processed_plant_view(processed_plant_id)
 
 @app.get("/health")
 def health() -> dict[str, str | int]:
