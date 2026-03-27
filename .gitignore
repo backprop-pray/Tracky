@@ -10,3 +10,6 @@ models/
 __pycache__/
 .agents/
 plant_pipeline/test_images/
+
+# Allow EfficientAD weights
+!EfficientAD/models/
