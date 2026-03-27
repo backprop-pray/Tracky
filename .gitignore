@@ -5,7 +5,7 @@ data/
 models/
 .lgd-nfy0
 .env
-.venv
+.venv/
 .vscode
 __pycache__/
 .agents/
@@ -18,3 +18,5 @@ plant_pipeline/test_images/
 PlantDoc/
 PlantVillage/
 anomaly_maps/
+
+*.mp4

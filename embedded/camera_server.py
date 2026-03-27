@@ -62,9 +62,11 @@ def _stream(rover, conn):
 
         # Sensors
         raw = rover.get_ultrasonic()
-        L = raw.get(1) or 0.0
-        F = raw.get(3) or 0.0
-        R = raw.get(2) or 0.0
+        # None = timeout (nothing in range); display as max range, not 0
+        _s = lambda v: v if v is not None else 300.0
+        L = _s(raw.get(1))
+        F = _s(raw.get(3))
+        R = _s(raw.get(2))
 
         # Frame
         frame_rgb = rover.getframe()
