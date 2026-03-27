@@ -12,7 +12,7 @@ final class PlantWebSocketService {
     private init() {}
 
     var onPlantReceived: ((Plant) -> Void)?
-    var onRecommendationReceived: ((String, String) -> Void)?
+    var onRecommendationReceived: ((Int, String, String) -> Void)?
 
     private var webSocketTask: URLSessionWebSocketTask?
     private var isConnected = false
@@ -274,7 +274,7 @@ final class PlantWebSocketService {
             print("[WS] Recommendation received for plant \(msg.plantId): \(msg.disease)")
 
             if let callback = onRecommendationReceived {
-                callback(msg.disease, msg.text)
+                callback(msg.plantId, msg.disease, msg.text)
                 print("[WS] onRecommendationReceived callback fired")
             } else {
                 print("[WS] onRecommendationReceived callback is nil — no listener attached!")

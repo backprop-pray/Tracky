@@ -132,63 +132,110 @@ struct PlantRecommendationView: View {
             .transition(.move(edge: .bottom).combined(with: .opacity))
 
             // Action prompt
-            Text("Does this look right?")
-                .font(.system(size: 12, weight: .regular))
-                .foregroundStyle(.secondary)
-                .padding(.top, 4)
+            if !viewModel.hasResponded {
+                Text("Does this look right?")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+            }
 
             // Accept / Reject buttons — taller, more confident
-            HStack(spacing: 12) {
-                // REJECT
-                Button { viewModel.respond(accepted: false) } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "xmark")
-                        Text("Reject")
+            if !viewModel.hasResponded {
+                HStack(spacing: 12) {
+                    // REJECT
+                    Button { viewModel.respond(accepted: false) } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "xmark")
+                            Text("Reject")
+                        }
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.red)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 54)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(Color.red.opacity(0.35), lineWidth: 1.5)
+                        )
                     }
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.red)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 54)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(Color.red.opacity(0.35), lineWidth: 1.5)
-                    )
-                }
-                .buttonStyle(RecommendationButtonStyle())
+                    .buttonStyle(RecommendationButtonStyle())
 
-                // ACCEPT
-                Button { viewModel.respond(accepted: true) } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "checkmark")
-                        Text("Accept")
+                    // ACCEPT
+                    Button { viewModel.respond(accepted: true) } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "checkmark")
+                            Text("Accept")
+                        }
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 54)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(Color.appOrange)
+                                .shadow(color: Color.appOrange.opacity(0.35),
+                                        radius: 10, y: 4)
+                        )
                     }
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 54)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(Color.appOrange)
-                            .shadow(color: Color.appOrange.opacity(0.35),
-                                    radius: 10, y: 4)
-                    )
+                    .buttonStyle(RecommendationButtonStyle())
                 }
-                .buttonStyle(RecommendationButtonStyle())
+                .transition(.opacity.combined(with: .move(edge: .bottom)).animation(.easeInOut(duration: 0.3)))
             }
-            .disabled(viewModel.hasResponded)
-            .opacity(viewModel.hasResponded ? 0.5 : 1.0)
-            .animation(.easeInOut(duration: 0.2), value: viewModel.hasResponded)
 
             // Response confirmation
             if viewModel.hasResponded {
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(Color.appOrange)
-                    Text("Response recorded")
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(.secondary)
+                if viewModel.responseAccepted {
+                    // Accepted confirmation
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundStyle(.green)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Thank you!")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(.primary)
+                            Text("Your feedback helps improve our AI")
+                                .font(.system(size: 12, weight: .regular))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(Color.green.opacity(0.06))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(Color.green.opacity(0.15), lineWidth: 1)
+                            )
+                    )
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.spring(response: 0.5, dampingFraction: 0.8)))
+                } else {
+                    // Rejected - show input prompt
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "info.circle.fill")
+                                .font(.system(size: 16))
+                                .foregroundStyle(Color.appOrange)
+                            Text("Help us improve")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(.primary)
+                        }
+                        Text("Share your diagnosis below")
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.appOrange.opacity(0.06))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.appOrange.opacity(0.15), lineWidth: 1)
+                            )
+                    )
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.spring(response: 0.5, dampingFraction: 0.8)))
                 }
-                .transition(.opacity.animation(.easeIn))
             }
         }
         .padding(.horizontal, 20)
@@ -278,31 +325,17 @@ struct OpinionInputView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            // Section header
-            HStack(spacing: 6) {
-                Image(systemName: "pencil.line")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color.appOrange)
-                Text("Your Diagnosis")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.primary)
-            }
-
-            Text("How would you treat this plant?")
-                .font(.system(size: 12, weight: .regular))
-                .foregroundStyle(.secondary)
-
             if viewModel.opinionSubmitted {
-                // Success card — replaces the input
+                // Success card — replaces the input completely and persists
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 20))
                         .foregroundStyle(.green)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Saved")
+                        Text("Thank you for your feedback")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(.primary)
-                        Text("Your diagnosis has been recorded")
+                        Text("Your diagnosis has been recorded and will help improve our AI")
                             .font(.system(size: 12, weight: .regular))
                             .foregroundStyle(.secondary)
                     }
@@ -317,8 +350,22 @@ struct OpinionInputView: View {
                                 .stroke(Color.green.opacity(0.15), lineWidth: 1)
                         )
                 )
-                .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.easeInOut(duration: 0.3)))
+                .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.spring(response: 0.5, dampingFraction: 0.8)))
             } else {
+                // Section header
+                HStack(spacing: 6) {
+                    Image(systemName: "pencil.line")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Color.appOrange)
+                    Text("Your Diagnosis")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.primary)
+                }
+
+                Text("How would you treat this plant?")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(.secondary)
+
                 // Text input
                 ZStack(alignment: .topLeading) {
                     RoundedRectangle(cornerRadius: 12)
@@ -352,7 +399,6 @@ struct OpinionInputView: View {
                             .allowsHitTesting(false)
                     }
                 }
-                .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.easeInOut(duration: 0.3)))
 
                 // Submit button
                 Button {
@@ -387,7 +433,6 @@ struct OpinionInputView: View {
                 .disabled(
                     viewModel.userOpinion.trimmingCharacters(in: .whitespaces).isEmpty
                     || viewModel.isSubmittingOpinion
-                    || viewModel.opinionSubmitted
                 )
                 .animation(.easeInOut(duration: 0.2), value: viewModel.userOpinion)
             }

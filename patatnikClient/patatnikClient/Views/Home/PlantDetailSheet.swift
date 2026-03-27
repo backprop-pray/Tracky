@@ -124,10 +124,14 @@ struct PlantDetailSheet: View {
                 // ZONE 3 — Analysis section
                 PlantRecommendationView(viewModel: viewModel)
 
-                // Separator + ZONE 4 — Opinion (only when loaded)
+                // ZONE 4 — Opinion section (only when loaded AND rejected OR already submitted)
                 if viewModel.recommendationLoaded {
                     separator
-                    OpinionInputView(viewModel: viewModel, plantId: plant.id)
+                    
+                    // Show opinion input only if user rejected OR if already submitted
+                    if !viewModel.responseAccepted || viewModel.opinionSubmitted {
+                        OpinionInputView(viewModel: viewModel, plantId: plant.id)
+                    }
                 }
 
                 Spacer().frame(height: 40)

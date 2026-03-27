@@ -146,40 +146,6 @@ struct LoginView: View {
     }
 }
 
-// MARK: - Scale Button Style
-
-struct ScaleButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
-    }
-}
-
-// MARK: - Stagger Animation Modifier
-
-private struct StaggerModifier: ViewModifier {
-    let index: Int
-    let appeared: Bool
-
-    func body(content: Content) -> some View {
-        content
-            .offset(y: appeared ? 0 : 40)
-            .opacity(appeared ? 1 : 0)
-            .animation(
-                .spring(response: 0.5, dampingFraction: 0.8)
-                .delay(Double(index) * 0.07),
-                value: appeared
-            )
-    }
-}
-
-extension View {
-    func staggerIn(index: Int, appeared: Bool) -> some View {
-        modifier(StaggerModifier(index: index, appeared: appeared))
-    }
-}
-
 #Preview {
     NavigationStack {
         LoginView()

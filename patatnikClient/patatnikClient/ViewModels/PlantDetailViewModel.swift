@@ -21,6 +21,7 @@ class PlantDetailViewModel: ObservableObject {
 
     // Response
     @Published var hasResponded: Bool = false
+    @Published var responseAccepted: Bool = false
 
     // Opinion
     @Published var userOpinion: String = ""
@@ -32,21 +33,35 @@ class PlantDetailViewModel: ObservableObject {
 
     func loadRecommendation(for plant: Plant) {
         currentPlantId = plant.id
+        
+        // Check if user already responded to this plant
+        let responseKey = "plant_\(plant.id)_responded"
+        let acceptedKey = "plant_\(plant.id)_accepted"
+        let opinionKey = "plant_\(plant.id)_opinion_submitted"
+        
+        hasResponded = UserDefaults.standard.bool(forKey: responseKey)
+        responseAccepted = UserDefaults.standard.bool(forKey: acceptedKey)
+        opinionSubmitted = UserDefaults.standard.bool(forKey: opinionKey)
+        
         isLoadingRecommendation = true
         recommendationLoaded = false
         recommendationError = false
         estimatedDisease = ""
         recommendation = ""
-        hasResponded = false
-        opinionSubmitted = false
         userOpinion = ""
 
         // Wire callback — must happen BEFORE any message could arrive
-        // Runs on MainActor since PlantWebSocketService is @MainActor
+        // The callback now filters by plantId to avoid cross-plant contamination
         PlantWebSocketService.shared.onRecommendationReceived = {
-            [weak self] disease, text in
-            // Already on MainActor because PlantWebSocketService is @MainActor
+            [weak self] plantId, disease, text in
             guard let self else { return }
+            
+            // Only process if this recommendation is for the current plant
+            guard plantId == self.currentPlantId else {
+                print("[ViewModel] Ignoring recommendation for plant \(plantId), waiting for \(self.currentPlantId ?? -1)")
+                return
+            }
+            
             self.recommendationReceived(disease: disease, text: text)
         }
 
@@ -69,7 +84,7 @@ class PlantDetailViewModel: ObservableObject {
     func recommendationReceived(disease: String, text: String) {
         loadingTask?.cancel()
         estimatedDisease = disease
-        recommendation = String(text.prefix(50))
+        recommendation = text
         withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
             recommendationLoaded = true
             isLoadingRecommendation = false
@@ -79,6 +94,12 @@ class PlantDetailViewModel: ObservableObject {
     func respond(accepted: Bool) {
         guard let plantId = currentPlantId else { return }
         hasResponded = true
+        responseAccepted = accepted
+        
+        // Persist response state
+        UserDefaults.standard.set(true, forKey: "plant_\(plantId)_responded")
+        UserDefaults.standard.set(accepted, forKey: "plant_\(plantId)_accepted")
+        
         Task {
             do {
                 try await APIClient.shared.post(
@@ -103,7 +124,11 @@ class PlantDetailViewModel: ObservableObject {
                 body: OpinionBody(text: trimmed),
                 requiresAuth: true
             )
-            withAnimation { opinionSubmitted = true }
+            withAnimation { 
+                opinionSubmitted = true 
+                // Persist opinion submission state
+                UserDefaults.standard.set(true, forKey: "plant_\(plantId)_opinion_submitted")
+            }
             userOpinion = ""
         } catch {
             print("Failed to submit opinion:", error)
