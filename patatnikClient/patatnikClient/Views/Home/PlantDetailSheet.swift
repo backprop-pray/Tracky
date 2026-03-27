@@ -234,7 +234,7 @@ struct PlantDetailSheet: View {
     // MARK: - ZONE 2: Identity Row
 
     private var identityRow: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(spacing: 5) {
             HStack(spacing: 8) {
                 Text("Plant #\(plant.id)")
                     .font(.system(size: 22, weight: .bold, design: .rounded))
@@ -253,6 +253,7 @@ struct PlantDetailSheet: View {
                     .lineLimit(1)
             }
         }
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, 18)
     }
 
