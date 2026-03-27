@@ -44,7 +44,7 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/auth/**",
                                 "/actuator/**",
-                                "/ws/**")
+                                "/ws/**", "/api/plants")
                         .permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
@@ -59,7 +59,14 @@ public class SecurityConfig {
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
+
+        CorsConfiguration piConfiguration = new CorsConfiguration();
+        piConfiguration.setAllowedOrigins(List.of("*"));
+        piConfiguration.setAllowedMethods(List.of("POST"));
+        piConfiguration.setAllowedHeaders(List.of("*"));
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/api/plants", piConfiguration);
         source.registerCorsConfiguration("/**", configuration);
         return source;
     }

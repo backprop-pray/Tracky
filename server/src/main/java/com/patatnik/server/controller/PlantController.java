@@ -27,10 +27,11 @@ public class PlantController extends BaseController {
     public ResponseEntity<ApiResponse<PlantResponse>> createPlant(
             @RequestParam("latitude") Double latitude,
             @RequestParam("longitude") Double longitude,
-            @RequestParam(value = "image", required = false) MultipartFile image,
-            @RequestHeader("Authorization") String authHeader) {
+            @RequestParam(value = "image", required = false) MultipartFile image) {
 
-        User user = resolveUser(authHeader);
+        // User user = resolveUser(authHeader);
+        User user = userRepository.findById(1L)
+            .orElseThrow(() -> new RuntimeException("User not found"));
 
         PlantResponse data = plantService.createPlant(latitude, longitude, image, user);
 
