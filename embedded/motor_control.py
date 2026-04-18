@@ -6,9 +6,9 @@ from drivers.motor.hbridge import DualHBridgeMotorDriver
 M1_IN1 = 20
 M1_IN2 = 21
 M2_IN1 = 16
-M2_IN2 = 12
-M1_PWM = 19
-M2_PWM = 13
+M2_IN2 = 13
+M1_PWM = 18
+M2_PWM = 19
 PWM_FREQ_HZ = 100
 STEP_SECONDS = 2.0
 
@@ -22,6 +22,7 @@ def main():
         m1_pwm=M1_PWM,
         m2_pwm=M2_PWM,
         pwm_frequency_hz=PWM_FREQ_HZ,
+        right_speed_factor=0.9,
     )
 
     try:
